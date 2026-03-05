@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SBS Tablo Excel
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  Spor Bilgi Sistemi - Verileri excel olarak indirme userscritpi
 // @author       Mahmut Elmas with the help of AI mahmutelmas@yaani.com
 // @match        *://spor.gsb.gov.tr/*
@@ -77,7 +77,7 @@
         return sig;
     }
 
-    // Verileri Çekme ve GELİŞMİŞ FİLTRELEME Fonksiyonu (TR Karakter Korumalı)
+    // Verileri Çekme ve GELİŞMİŞ FİLTRELEME Fonksiyonu
     function getTableRows(includeHeader, tableElement, selectedIndices = null, appliedFilters = []) {
         if (!tableElement) return [];
         let rows = [];
@@ -97,10 +97,8 @@
 
             let allCells = Array.from(row.querySelectorAll("td")).map(col => col.innerText.trim());
 
-            // --- GÜÇLENDİRİLMİŞ SATIR FİLTRELEME MANTIĞI ---
             let passesFilters = true;
             for (let f of appliedFilters) {
-                // Gizli boşlukları trim ile sil, Türkçe'ye uygun küçük harfe çevir
                 let cellText = (allCells[f.colIdx] || "").trim();
                 let searchVal1 = (f.val1 || "").trim();
                 let searchVal2 = (f.val2 || "").trim();
@@ -115,9 +113,8 @@
                     if (cellTextLower.includes(searchVal1Lower)) passesFilters = false;
                 }
                 else if (f.type === 'between') {
-                    // İçindeki harfleri sil (örn: "Yaş: 25" veya "1.500,50 TL"), sadece rakam, virgül, eksi ve noktayı bırak
                     let cleanedStr = cellText.replace(/[^0-9,\.-]/g, '');
-                    cleanedStr = cleanedStr.replace(/\./g, '').replace(',', '.'); // 1.500,50 -> 1500.50
+                    cleanedStr = cleanedStr.replace(/\./g, '').replace(',', '.');
 
                     let cellNum = parseFloat(cleanedStr);
                     let min = parseFloat(searchVal1.replace(/\./g, '').replace(',', '.'));
@@ -129,8 +126,7 @@
                 }
             }
 
-            if (!passesFilters) return; // Filtreyi geçemeyen satırı listeye ekleme
-            // ----------------------------------------
+            if (!passesFilters) return;
 
             let filteredCells = selectedIndices ? allCells.filter((_, idx) => selectedIndices.includes(idx)) : allCells;
             if (filteredCells.length > 0) rows.push(filteredCells);
@@ -204,9 +200,7 @@
             if (selectedIndices.length === 0) { showToast("Lütfen en az bir sütun seçin.", "warning"); return; }
         }
 
-        // Seçilen gelişmiş filtreleri kopyala
         let currentActiveFilters = [...globalFilters];
-
         const overlay = document.getElementById('gsb-modal-overlay');
         if (overlay) overlay.remove();
 
@@ -238,7 +232,6 @@
                     await new Promise(r => setTimeout(r, 400));
                     let tbl = getActiveTable();
                     if (!tbl) continue;
-
                     let newSig = getPageRawSignature(tbl);
                     if (newSig !== oldRawSignature && newSig !== "") {
                         await new Promise(r => setTimeout(r, 400));
@@ -287,7 +280,6 @@
             while (currentPageNum <= targetEndPage) {
                 if (floatingBtn && !isCurrentOnly) floatingBtn.innerHTML = `⏳ Sayfa: ${currentPageNum}...`;
 
-                // Verileri çekerken GÜÇLENDİRİLMİŞ FİLTRELERİ GÖNDER
                 let rowsToSave = getTableRows(pagesScraped === 0, getActiveTable(), selectedIndices, currentActiveFilters);
                 allData = allData.concat(rowsToSave);
                 pagesScraped++;
@@ -336,7 +328,8 @@
     function showModal() {
         if (document.getElementById('gsb-modal-overlay')) return;
 
-        globalFilters = []; // Menü açıldığında filtreleri sıfırla
+        globalFilters = [];
+        let savedPresets = JSON.parse(localStorage.getItem('gsb_filter_presets')) || {};
 
         const table = getActiveTable();
         const headers = Array.from(table?.querySelectorAll("thead th") || []).map((th, i) => th.innerText.trim() || ("Sütun " + (i + 1)));
@@ -346,7 +339,7 @@
         Object.assign(overlay.style, { position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.8)', zIndex: '2147483647', display: 'flex', justifyContent: 'center', alignItems: 'center' });
 
         const modal = document.createElement('div');
-        Object.assign(modal.style, { backgroundColor: '#fff', padding: '20px', borderRadius: '12px', width: '400px', maxHeight: '90vh', overflowY: 'auto', position: 'relative', fontFamily: 'Segoe UI, sans-serif' });
+        Object.assign(modal.style, { backgroundColor: '#fff', padding: '20px', borderRadius: '12px', width: '420px', maxHeight: '90vh', overflowY: 'auto', position: 'relative', fontFamily: 'Segoe UI, sans-serif' });
 
         let columnListHtml = headers.map((h, i) => `
             <div style="display:flex; align-items:center; margin-bottom:5px; font-size:13px;">
@@ -358,7 +351,7 @@
         let filterOptionsHtml = headers.map((h, i) => `<option value="${i}">${h}</option>`).join('');
 
         modal.innerHTML = `
-            <h3 style="margin:0 0 15px 0; color:#1d6f42; text-align:center;">📊 Excel Aktarım (V39.1)</h3>
+            <h3 style="margin:0 0 15px 0; color:#1d6f42; text-align:center;">📊 Excel Aktarım (V40.0)</h3>
 
             <div style="background:#f9f9f9; padding:12px; border-radius:8px; margin-bottom:10px; border:1px solid #eee;">
                 <div style="font-size:13px; font-weight:bold; color:#555; margin-bottom:8px;">İndirme Formatı:</div>
@@ -399,6 +392,19 @@
                     <button id="gsb-add-filter-btn" style="width:100%; padding:6px; background:#1d6f42; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">➕ Kuralı Ekle</button>
 
                     <ul id="gsb-active-filters-list" style="list-style:none; padding-left:0; margin-top:10px; margin-bottom:0; font-size:11px; color:#555;"></ul>
+
+                    <div style="margin-top:10px; border-top:1px dashed #9bc2aa; padding-top:10px;">
+                        <div style="font-size:12px; font-weight:bold; color:#1d6f42; margin-bottom:5px;">💾 Kayıtlı Şablonlar</div>
+                        <div style="display:flex; gap:5px; margin-bottom:5px;">
+                            <input type="text" id="gsb-preset-name" placeholder="Bu filtre grubuna isim ver" style="flex:1; padding:6px; font-size:11px; border:1px solid #ccc; border-radius:4px;">
+                            <button id="gsb-save-preset-btn" style="padding:6px 12px; background:#3498db; color:white; border:none; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold;">Kaydet</button>
+                        </div>
+                        <div style="display:flex; gap:5px;">
+                            <select id="gsb-preset-select" style="flex:1; padding:6px; font-size:11px; border:1px solid #ccc; border-radius:4px;"></select>
+                            <button id="gsb-load-preset-btn" style="padding:6px 10px; background:#f39c12; color:white; border:none; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold;">Yükle</button>
+                            <button id="gsb-del-preset-btn" style="padding:6px 10px; background:#e74c3c; color:white; border:none; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold;">Sil</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -439,7 +445,7 @@
             const list = document.getElementById('gsb-active-filters-list');
             list.innerHTML = '';
             globalFilters.forEach((f, idx) => {
-                let colName = headers[f.colIdx];
+                let colName = headers[f.colIdx] || "Bilinmeyen Sütun";
                 let text = f.type === 'contains' ? `<b>${colName}</b>: '${f.val1}' içeriyorsa` :
                            f.type === 'not_contains' ? `<b>${colName}</b>: '${f.val1}' içermiyorsa` :
                            `<b>${colName}</b>: ${f.val1} ile ${f.val2} arasındaysa`;
@@ -465,7 +471,7 @@
             let val2 = document.getElementById('gsb-filter-val2').value.trim();
 
             if (!val1) { showToast("Lütfen bir değer girin.", "warning"); return; }
-            if (type === 'between' && (!val1 || !val2 || isNaN(val1) || isNaN(val2))) {
+            if (type === 'between' && (!val1 || !val2 || isNaN(val1.replace(/\./g, '').replace(',', '.')) || isNaN(val2.replace(/\./g, '').replace(',', '.')))) {
                 showToast("Aralık filtresi için iki geçerli sayı girmelisiniz.", "warning"); return;
             }
 
@@ -473,6 +479,50 @@
             document.getElementById('gsb-filter-val1').value = '';
             document.getElementById('gsb-filter-val2').value = '';
             renderFilters();
+        };
+
+        // HAFIZA İŞLEMLERİ
+        function updatePresetSelect() {
+            const select = document.getElementById('gsb-preset-select');
+            select.innerHTML = '<option value="">-- Kayıtlı Şablon Seç --</option>';
+            for (let name in savedPresets) {
+                let opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                select.appendChild(opt);
+            }
+        }
+        updatePresetSelect(); // Açılışta doldur
+
+        document.getElementById('gsb-save-preset-btn').onclick = () => {
+            const name = document.getElementById('gsb-preset-name').value.trim();
+            if (!name) { showToast("Lütfen şablon için bir isim yazın.", "warning"); return; }
+            if (globalFilters.length === 0) { showToast("Kaydedilecek aktif bir filtre yok. Önce yukarıdan kural ekleyin.", "warning"); return; }
+
+            savedPresets[name] = JSON.parse(JSON.stringify(globalFilters)); // Filtreleri kopyala
+            localStorage.setItem('gsb_filter_presets', JSON.stringify(savedPresets));
+            document.getElementById('gsb-preset-name').value = '';
+            updatePresetSelect();
+            showToast(`✅ "${name}" başarıyla kaydedildi!`, "success");
+        };
+
+        document.getElementById('gsb-load-preset-btn').onclick = () => {
+            const name = document.getElementById('gsb-preset-select').value;
+            if (!name || !savedPresets[name]) { showToast("Lütfen yüklenecek bir şablon seçin.", "warning"); return; }
+
+            globalFilters = JSON.parse(JSON.stringify(savedPresets[name])); // Şablonu global listeye yükle
+            renderFilters();
+            showToast(`📂 "${name}" filtreleri yüklendi!`, "info");
+        };
+
+        document.getElementById('gsb-del-preset-btn').onclick = () => {
+            const name = document.getElementById('gsb-preset-select').value;
+            if (!name || !savedPresets[name]) return;
+
+            delete savedPresets[name];
+            localStorage.setItem('gsb_filter_presets', JSON.stringify(savedPresets));
+            updatePresetSelect();
+            showToast(`🗑️ "${name}" silindi.`, "info");
         };
 
         const checkFormat = () => document.querySelector('input[name="gsb-format"]:checked').value === 'xlsx';
