@@ -11,7 +11,7 @@
 // @require      https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js
 // @updateURL    https://raw.githubusercontent.com/mahmutelmas06/Spor-Bilgi-Sistemi-Excel/main/sbs_tablo_excel.user.js
-// @downloadURL  https://raw.githubusercontent.com/Kmahmutelmas06/Spor-Bilgi-Sistemi-Excel/main/sbs_tablo_excel.user.js
+// @downloadURL  https://raw.githubusercontent.com/mahmutelmas06/Spor-Bilgi-Sistemi-Excel/main/sbs_tablo_excel.user.js
 // @run-at       document-end
 // ==/UserScript==
 
