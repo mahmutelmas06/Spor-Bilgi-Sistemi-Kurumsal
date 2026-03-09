@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SBS Tablo Excel
 // @namespace    http://tampermonkey.net/
-// @version      1.5
+// @version      1.6
 // @description  Spor Bilgi Sistemi - Verileri excel olarak indirme userscritpi
 // @author       Mahmut Elmas with the help of AI
 // @match        *://spor.gsb.gov.tr/*
@@ -166,7 +166,6 @@
         return sig;
     }
 
-    // antrenorAdi parametresi eklendi
     function getTableRows(includeHeader, tableElement, selectedIndices = null, appliedFilters = [], antrenorAdi = "") {
         if (!tableElement) return [];
         let rows = [];
@@ -177,7 +176,6 @@
                 let allCols = Array.from(row.querySelectorAll("th")).map(col => col.innerText.trim());
                 let filteredCols = selectedIndices ? allCols.filter((_, idx) => selectedIndices.includes(idx)) : allCols;
                 if (filteredCols.length > 0) {
-                    // Eğer sayfadan antrenör adı alındıysa başlığa yeni sütun ekle
                     if (antrenorAdi) filteredCols.push("Antrenör Ad Soyad");
                     rows.push(filteredCols);
                 }
@@ -205,16 +203,51 @@
                 else if (f.type === 'not_contains') {
                     if (cellTextLower.includes(searchVal1Lower)) passesFilters = false;
                 }
-                else if (f.type === 'between') {
-                    let cleanedStr = cellText.replace(/[^0-9,\.-]/g, '');
-                    cleanedStr = cleanedStr.replace(/\./g, '').replace(',', '.');
+                else if (['between', 'greater', 'less'].includes(f.type)) {
+                    let parseDate = (str) => {
+                        if (!str) return null;
+                        let m = str.match(/(\d{2})[-./](\d{2})[-./](\d{4})/);
+                        return m ? parseInt(m[3] + m[2] + m[1]) : null;
+                    };
+                    let parseTime = (str) => {
+                        if (!str) return null;
+                        let m = str.match(/(\d{2})[:.](\d{2})/);
+                        return m ? parseInt(m[1] + m[2]) : null;
+                    };
 
-                    let cellNum = parseFloat(cleanedStr);
-                    let min = parseFloat(searchVal1.replace(/\./g, '').replace(',', '.'));
-                    let max = parseFloat(searchVal2.replace(/\./g, '').replace(',', '.'));
+                    let v1Date = parseDate(searchVal1);
+                    let v1Time = parseTime(searchVal1);
 
-                    if (isNaN(cellNum) || isNaN(min) || isNaN(max) || cellNum < min || cellNum > max) {
-                        passesFilters = false;
+                    if (v1Date !== null) {
+                        let cDate = parseDate(cellText);
+                        let v2Date = parseDate(searchVal2);
+                        if (cDate === null) passesFilters = false;
+                        else if (f.type === 'between' && (cDate < v1Date || cDate > v2Date)) passesFilters = false;
+                        else if (f.type === 'greater' && cDate < v1Date) passesFilters = false;
+                        else if (f.type === 'less' && cDate > v1Date) passesFilters = false;
+                    }
+                    else if (v1Time !== null) {
+                        let cTime = parseTime(cellText);
+                        let v2Time = parseTime(searchVal2);
+                        if (cTime === null) passesFilters = false;
+                        else if (f.type === 'between' && (cTime < v1Time || cTime > v2Time)) passesFilters = false;
+                        else if (f.type === 'greater' && cTime < v1Time) passesFilters = false;
+                        else if (f.type === 'less' && cTime > v1Time) passesFilters = false;
+                    }
+                    else {
+                        let cleanedStr = cellText.replace(/[^0-9,\.-]/g, '');
+                        cleanedStr = cleanedStr.replace(/\./g, '').replace(',', '.');
+                        let cellNum = parseFloat(cleanedStr);
+                        let num1 = parseFloat(searchVal1.replace(/\./g, '').replace(',', '.'));
+                        let num2 = parseFloat(searchVal2.replace(/\./g, '').replace(',', '.'));
+
+                        if (isNaN(cellNum)) {
+                            passesFilters = false;
+                        } else {
+                            if (f.type === 'between' && (isNaN(num1) || isNaN(num2) || cellNum < num1 || cellNum > num2)) passesFilters = false;
+                            else if (f.type === 'greater' && (isNaN(num1) || cellNum < num1)) passesFilters = false;
+                            else if (f.type === 'less' && (isNaN(num1) || cellNum > num1)) passesFilters = false;
+                        }
                     }
                 }
             }
@@ -223,7 +256,6 @@
 
             let filteredCells = selectedIndices ? allCells.filter((_, idx) => selectedIndices.includes(idx)) : allCells;
             if (filteredCells.length > 0) {
-                // Sütun sonuna antrenör adını ekle
                 if (antrenorAdi) filteredCells.push(antrenorAdi);
                 rows.push(filteredCells);
             }
@@ -262,11 +294,20 @@
             });
 
             worksheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: data[0].length } };
+
             worksheet.columns.forEach(column => {
                 let maxL = 0;
-                column.eachCell({ includeEmpty: true }, c => {
-                    const l = c.value ? c.value.toString().length : 0;
-                    if (l > maxL) maxL = l;
+                column.eachCell({ includeEmpty: true }, (c, rowNumber) => {
+                    if (rowNumber > 1) {
+                        c.alignment = { wrapText: true, vertical: 'top', horizontal: 'left' };
+                    }
+                    if (c.value) {
+                        let text = c.value.toString();
+                        let lines = text.split('\n');
+                        lines.forEach(line => {
+                            if (line.length > maxL) maxL = line.length;
+                        });
+                    }
                 });
                 column.width = Math.min(Math.max(maxL + 4, 12), 60);
             });
@@ -305,7 +346,6 @@
             const floatingBtn = document.getElementById('gsb-floating-btn');
             showToast("⏳ Tarama başlıyor... Lütfen bekleyin.", "info", 4000);
 
-            // Antrenör ismini çekme mantığı (Eğer sayfada varsa)
             let currentAntrenorAdi = "";
             const lblAntrenor = document.getElementById('lblAntrenorAdSoyad');
             if (lblAntrenor && lblAntrenor.innerText.trim() !== "") {
@@ -313,24 +353,25 @@
             }
 
             const activeTabPane = document.querySelector('.tab-pane.active.in') || document.querySelector('.tab-pane.active') || document;
+            const tableContainer = activeTable.closest('.bootstrap-table') || activeTabPane;
 
             async function waitForDataChange(oldRawSignature, maxWait = 25) {
                 let i = 0;
-                while (i < maxWait) {
+                let absoluteTimeout = 0;
+
+                while (i < maxWait && absoluteTimeout < 50) {
                     await new Promise(r => setTimeout(r, 400));
+                    absoluteTimeout++;
 
                     let tbl = getActiveTable();
                     let newSig = getPageRawSignature(tbl);
 
                     if (waitMode === 'auto') {
                         let isLoading = false;
-                        if (activeTabPane.querySelector('.fixed-table-loading:not([style*="display: none"])') ||
-                            activeTabPane.querySelector('.blockOverlay') ||
-                            activeTabPane.querySelector('.loading-message')) {
-                            isLoading = true;
-                        }
-
-                        if (newSig === "") isLoading = true;
+                        const loaders = tableContainer.querySelectorAll('.fixed-table-loading, .blockOverlay, .loading-message');
+                        loaders.forEach(l => {
+                            if (l.offsetWidth > 0 && l.offsetHeight > 0) isLoading = true;
+                        });
                         if (isLoading) continue;
                     }
 
@@ -345,21 +386,32 @@
                         let userWantsToFinish = confirm("⏳ ZAMAN AŞIMI! (Veri değişmedi)\n\nİnternet bağlantınız yavaş olabilir veya sayfanın yüklenmesi hala tamamlanmadı.\n\nİndirmeyi BİTİRİP şimdiye kadar olanları Excel'e aktarmak için: [TAMAM / OK]\nBeklemeye DEVAM ETMEK için: [İPTAL / CANCEL] tuşuna basın.");
                         if (!userWantsToFinish) {
                             i = 0;
+                            absoluteTimeout = 0;
                         }
                     }
                 }
                 return null;
             }
 
+            // GÜNCELLEME 1: Dinamik Kayıt Sayısı Seçimi (Önceki 100 limiti yerine)
             if (endPage === Infinity && activeTable) {
-                if (floatingBtn) floatingBtn.innerHTML = `⏳ 100 Kayıt...`;
-                const maxLink = Array.from(activeTabPane.querySelectorAll('.page-list .dropdown-menu li a')).find(a => a.innerText.trim() === '100');
+                const dropDownLinks = Array.from(tableContainer.querySelectorAll('.page-list .dropdown-menu li a'));
 
-                if (maxLink && !maxLink.parentElement.classList.contains('active')) {
-                    let pre100Sig = getPageRawSignature(activeTable);
-                    maxLink.click();
-                    await waitForDataChange(pre100Sig, 25);
-                    activeTable = getActiveTable();
+                if (dropDownLinks.length > 0) {
+                    // Dropdown listesindeki en son elemanı seç (En yüksek rakam veya Tümü)
+                    const maxLink = dropDownLinks[dropDownLinks.length - 1];
+                    let maxText = maxLink.innerText.trim() || 'Maks';
+
+                    if (floatingBtn) floatingBtn.innerHTML = `⏳ ${maxText} Kayıt Seçiliyor...`;
+
+                    if (!maxLink.parentElement.classList.contains('active')) {
+                        let preMaxSig = getPageRawSignature(activeTable);
+                        maxLink.click();
+                        await waitForDataChange(preMaxSig, 25);
+                        activeTable = getActiveTable();
+                    }
+                } else {
+                    if (floatingBtn) floatingBtn.innerHTML = `⏳ Sayfa Ayarlanıyor...`;
                 }
             }
 
@@ -376,13 +428,13 @@
             }
             let currentRawSignature = initialSig;
 
-            let activeBtn = activeTabPane.querySelector('.pagination li.active a, .pagination li.page-item.active a, .page-number.active a');
+            let activeBtn = tableContainer.querySelector('.pagination li.active a, .pagination li.page-item.active a, .page-number.active a');
             let currentUIPage = activeBtn ? parseInt(activeBtn.innerText.trim()) : 1;
             if (isNaN(currentUIPage)) currentUIPage = 1;
 
             if (!isCurrentOnly && startPage > 1 && startPage !== currentUIPage) {
                 if (floatingBtn) floatingBtn.innerHTML = `⏳ ${startPage}. Sayfaya Atlanıyor...`;
-                let targetBtn = Array.from(activeTabPane.querySelectorAll('.pagination li a')).find(a => parseInt(a.innerText.trim()) === startPage);
+                let targetBtn = Array.from(tableContainer.querySelectorAll('.pagination li a')).find(a => parseInt(a.innerText.trim()) === startPage);
 
                 if (activeTable.id) {
                     const script = document.createElement('script');
@@ -404,16 +456,23 @@
             while (currentPageNum <= targetEndPage) {
                 if (floatingBtn && !isCurrentOnly) floatingBtn.innerHTML = `⏳ Sayfa: ${currentPageNum}...`;
 
-                // currentAntrenorAdi'ni getTableRows'a gönderiyoruz
                 let rowsToSave = getTableRows(pagesScraped === 0, getActiveTable(), selectedIndices, currentActiveFilters, currentAntrenorAdi);
                 allData = allData.concat(rowsToSave);
                 pagesScraped++;
 
                 if (currentPageNum >= targetEndPage) break;
 
-                let nextBtn = activeTabPane.querySelector('.pagination li.page-next a, .pagination li.next a');
+                let nextBtn = tableContainer.querySelector('.pagination li.page-next a, .pagination li.next a');
                 let nextLi = nextBtn ? nextBtn.closest('li') : null;
-                if (!nextBtn || (nextLi && nextLi.classList.contains('disabled'))) break;
+
+                // GÜNCELLEME 2: Son sayfa UX Kontrolü
+                if (!nextBtn || (nextLi && nextLi.classList.contains('disabled'))) {
+                    if (floatingBtn) floatingBtn.innerHTML = `⏳ Son sayfa kontrolü yapılıyor...`;
+                    await new Promise(r => setTimeout(r, 800)); // Okuması için kısa bekleme
+                    break;
+                }
+
+                if (floatingBtn) floatingBtn.innerHTML = `⏳ ${currentPageNum + 1}. Sayfaya Geçiliyor...`;
 
                 let tbl = getActiveTable();
                 if (tbl && tbl.id) {
@@ -427,7 +486,8 @@
 
                 let newSig = await waitForDataChange(currentRawSignature, 25);
                 if (!newSig) {
-                    showToast(`⚠️ Sonraki sayfaya geçiş yapılamadı. Mevcut liste indiriliyor.`, "warning");
+                    if (floatingBtn) floatingBtn.innerHTML = `⏳ Son sayfa kontrolü yapılıyor...`;
+                    showToast(`⚠️ Sayfa değişmedi, son sayfaya ulaşılmış olabilir. Mevcut liste indiriliyor.`, "info");
                     break;
                 }
                 currentRawSignature = newSig;
@@ -435,6 +495,8 @@
             }
 
             if (allData.length > 0) {
+                // Excel hazırlama sürecini göster
+                if (floatingBtn) floatingBtn.innerHTML = `⏳ Excel Dosyası Hazırlanıyor...`;
                 const tabName = document.querySelector('.nav-tabs li.active a')?.innerText.trim().replace(/[^a-zA-Z0-9]/g, '_') || 'GSB_Veri';
                 let rangeText = isCurrentOnly ? "TekSayfa" : (endPage === Infinity ? "TumSayfalar" : `Sayfa${startPage}-${startPage + pagesScraped - 1}`);
                 const fileName = `${tabName}_${rangeText}_${new Date().toLocaleDateString().replace(/\./g,'-')}`;
@@ -503,7 +565,9 @@
                     <select id="gsb-filter-type" style="width:100%; padding:6px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc; font-size:12px;">
                         <option value="contains">Şunu İçeriyorsa (Metin)</option>
                         <option value="not_contains">Şunu İçermiyorsa (Metin)</option>
-                        <option value="between">Şu Aralıkta İse (Sayı)</option>
+                        <option value="between">Şu Aralıkta İse (Tarih, Saat, Sayı)</option>
+                        <option value="greater">Büyük veya Sonra İse (>=)</option>
+                        <option value="less">Küçük veya Önce İse (<=)</option>
                     </select>
                     <input type="text" id="gsb-filter-val1" placeholder="Değer 1" style="width:100%; padding:6px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc; font-size:12px;">
                     <input type="text" id="gsb-filter-val2" placeholder="Değer 2 (Sadece Aralık için)" style="width:100%; padding:6px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc; font-size:12px; display:none;">
@@ -557,7 +621,9 @@
 
         const filterTypeSelect = document.getElementById('gsb-filter-type');
         const filterVal2Input = document.getElementById('gsb-filter-val2');
-        filterTypeSelect.onchange = (e) => { filterVal2Input.style.display = e.target.value === 'between' ? 'block' : 'none'; };
+        filterTypeSelect.onchange = (e) => {
+            filterVal2Input.style.display = e.target.value === 'between' ? 'block' : 'none';
+        };
 
         function renderFilters() {
             const list = document.getElementById('gsb-active-filters-list');
@@ -566,6 +632,8 @@
                 let colName = headers[f.colIdx] || "Bilinmeyen Sütun";
                 let text = f.type === 'contains' ? `<b>${colName}</b>: '${f.val1}' içeriyorsa` :
                            f.type === 'not_contains' ? `<b>${colName}</b>: '${f.val1}' içermiyorsa` :
+                           f.type === 'greater' ? `<b>${colName}</b>: ${f.val1} ve büyük/sonra ise` :
+                           f.type === 'less' ? `<b>${colName}</b>: ${f.val1} ve küçük/önce ise` :
                            `<b>${colName}</b>: ${f.val1} ile ${f.val2} arasındaysa`;
 
                 let li = document.createElement('li');
@@ -589,8 +657,8 @@
             let val2 = document.getElementById('gsb-filter-val2').value.trim();
 
             if (!val1) { showToast("Lütfen bir değer girin.", "warning"); return; }
-            if (type === 'between' && (!val1 || !val2 || isNaN(val1.replace(/\./g, '').replace(',', '.')) || isNaN(val2.replace(/\./g, '').replace(',', '.')))) {
-                showToast("Aralık filtresi için iki geçerli sayı girmelisiniz.", "warning"); return;
+            if (type === 'between' && (!val1 || !val2)) {
+                showToast("Aralık filtresi için iki geçerli değer girmelisiniz.", "warning"); return;
             }
 
             globalFilters.push({ colIdx, type, val1, val2 });
@@ -675,7 +743,6 @@
         let isDragging = false, startX, startY, startLeft, startTop;
 
         const onMouseMove = (ev) => {
-            // SADECE fare 5 pikselden fazla hareket ederse "Sürüklendi" olarak işaretle
             if (Math.abs(ev.clientX - startX) > 5 || Math.abs(ev.clientY - startY) > 5) {
                 isDragging = true;
                 btn.style.left = startLeft + (ev.clientX - startX) + 'px';
