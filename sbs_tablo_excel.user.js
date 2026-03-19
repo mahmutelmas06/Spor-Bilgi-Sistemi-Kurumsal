@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SBS Tablo Excel
 // @namespace    http://tampermonkey.net/
-// @version      1.6
-// @description  Spor Bilgi Sistemi - Verileri excel olarak indirme userscritpi
+// @version      1.9
+// @description  Spor Bilgi Sistemi - Verileri excel olarak indirme userscript
 // @author       Mahmut Elmas with the help of AI
 // @match        *://spor.gsb.gov.tr/*
 // @grant        GM_registerMenuCommand
@@ -22,7 +22,9 @@
 (function () {
     'use strict';
 
-    // --- Ayar Değişikliği Uyarı Modalı ---
+    // ============================================================
+    // AYAR DEGİSİKLİGİ UYARI MODALI
+    // ============================================================
     function showRefreshModal(settingName, newValue) {
         const overlay = document.createElement('div');
         Object.assign(overlay.style, {
@@ -30,41 +32,29 @@
             backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '2147483647',
             display: 'flex', justifyContent: 'center', alignItems: 'center'
         });
-
         const modal = document.createElement('div');
         Object.assign(modal.style, {
             backgroundColor: '#fff', padding: '20px 25px', borderRadius: '10px',
             boxShadow: '0 5px 15px rgba(0,0,0,0.3)', textAlign: 'center',
             fontFamily: 'Segoe UI, sans-serif', minWidth: '320px'
         });
-
         modal.innerHTML = `
-            <h4 style="margin: 0 0 10px 0; color: #1d6f42;">Ayar Güncellendi</h4>
-            <p style="margin: 0 0 20px 0; font-size: 14px; color: #333;">
+            <h4 style="margin:0 0 10px 0; color:#1d6f42;">Ayar Güncellendi</h4>
+            <p style="margin:0 0 20px 0; font-size:14px; color:#333;">
                 <b>${settingName}</b>: <span style="color:#e74c3c; font-weight:bold;">${newValue}</span><br><br>
-                Değişikliklerin etkili olması için sayfayı yenileyin.
+                Degisikliklerin etkili olmasi için sayfayi yenileyin.
             </p>
         `;
-
         const btnContainer = document.createElement('div');
         Object.assign(btnContainer.style, { display: 'flex', gap: '10px', justifyContent: 'center' });
-
         const btnRefresh = document.createElement('button');
         btnRefresh.innerText = 'Yenile';
-        Object.assign(btnRefresh.style, {
-            padding: '8px 15px', backgroundColor: '#3498db', color: 'white',
-            border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', flex: '1'
-        });
+        Object.assign(btnRefresh.style, { padding: '8px 15px', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', flex: '1' });
         btnRefresh.onclick = () => location.reload();
-
         const btnLater = document.createElement('button');
         btnLater.innerText = 'Sonra Yenile';
-        Object.assign(btnLater.style, {
-            padding: '8px 15px', backgroundColor: '#95a5a6', color: 'white',
-            border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', flex: '1'
-        });
+        Object.assign(btnLater.style, { padding: '8px 15px', backgroundColor: '#95a5a6', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', flex: '1' });
         btnLater.onclick = () => overlay.remove();
-
         btnContainer.appendChild(btnRefresh);
         btnContainer.appendChild(btnLater);
         modal.appendChild(btnContainer);
@@ -72,26 +62,67 @@
         document.body.appendChild(overlay);
     }
 
-    // --- Tampermonkey Gelişmiş Menü Ayarları ---
+    // ============================================================
+    // FIX 7: confirm() YERİNE ASYNC ONAY MODALI
+    // ============================================================
+    function showConfirmModal(message) {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            Object.assign(overlay.style, {
+                position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh',
+                backgroundColor: 'rgba(0,0,0,0.65)', zIndex: '2147483647',
+                display: 'flex', justifyContent: 'center', alignItems: 'center'
+            });
+            const modal = document.createElement('div');
+            Object.assign(modal.style, {
+                backgroundColor: '#fff', padding: '24px 28px', borderRadius: '12px',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.35)', textAlign: 'center',
+                fontFamily: 'Segoe UI, sans-serif', minWidth: '320px', maxWidth: '420px'
+            });
+            modal.innerHTML = `<p style="font-size:14px; color:#333; margin:0 0 20px 0; line-height:1.6;">${message}</p>`;
+            const btnContainer = document.createElement('div');
+            Object.assign(btnContainer.style, { display: 'flex', gap: '10px', justifyContent: 'center' });
+            const btnOk = document.createElement('button');
+            btnOk.innerHTML = '✅ Bitir / İndir';
+            Object.assign(btnOk.style, { padding: '9px 16px', backgroundColor: '#2ecc71', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', flex: '1', fontSize: '13px' });
+            const btnCancel = document.createElement('button');
+            btnCancel.innerHTML = '⏳ Beklemeye Devam';
+            Object.assign(btnCancel.style, { padding: '9px 16px', backgroundColor: '#e74c3c', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', flex: '1', fontSize: '13px' });
+            btnOk.onclick = () => { overlay.remove(); resolve(true); };
+            btnCancel.onclick = () => { overlay.remove(); resolve(false); };
+            btnContainer.appendChild(btnOk);
+            btnContainer.appendChild(btnCancel);
+            modal.appendChild(btnContainer);
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+        });
+    }
+
+    // ============================================================
+    // AYARLAR
+    // ============================================================
     let downloadFormat = GM_getValue('gsb_format', 'xlsx');
     let waitMode = GM_getValue('gsb_wait_mode', 'auto');
 
-    GM_registerMenuCommand("⚙️ İndirme Formatı (Şu an: " + downloadFormat.toUpperCase() + ")", () => {
+    GM_registerMenuCommand("⚙️ İndirme Formati (Su an: " + downloadFormat.toUpperCase() + ")", () => {
         downloadFormat = downloadFormat === 'xlsx' ? 'csv' : 'xlsx';
         GM_setValue('gsb_format', downloadFormat);
-        showRefreshModal("İndirme Formatı", downloadFormat.toUpperCase());
+        showRefreshModal("İndirme Formati", downloadFormat.toUpperCase());
     });
 
-    GM_registerMenuCommand("⏳ Sayfa Geçişi (Şu an: " + (waitMode === 'auto' ? 'OTOMATİK' : 'MANUEL') + ")", () => {
+    GM_registerMenuCommand("⏳ Sayfa Gecisi (Su an: " + (waitMode === 'auto' ? 'OTOMATİK' : 'MANUEL') + ")", () => {
         waitMode = waitMode === 'auto' ? 'manual' : 'auto';
         GM_setValue('gsb_wait_mode', waitMode);
-        showRefreshModal("Sayfa Geçiş Modu", waitMode === 'auto' ? 'OTOMATİK' : 'MANUEL ONAYLI');
+        showRefreshModal("Sayfa Gecis Modu", waitMode === 'auto' ? 'OTOMATİK' : 'MANUEL ONAYLI');
     });
 
     let isRunning = false;
+    let stopRequested = false;
     let globalFilters = [];
 
-    // --- Şık Bildirim (Toast) Sistemi ---
+    // ============================================================
+    // TOAST BİLDİRİM
+    // ============================================================
     function showToast(message, type = "info", duration = 4000) {
         let container = document.getElementById('gsb-toast-container');
         if (!container) {
@@ -104,13 +135,11 @@
             });
             document.body.appendChild(container);
         }
-
         const toast = document.createElement('div');
         let bgColor = '#3498db';
         if (type === 'success') bgColor = '#2ecc71';
         else if (type === 'warning') bgColor = '#f39c12';
         else if (type === 'error') bgColor = '#e74c3c';
-
         Object.assign(toast.style, {
             backgroundColor: bgColor, color: 'white', padding: '15px 25px',
             borderRadius: '8px', boxShadow: '0 5px 15px rgba(0,0,0,0.3)',
@@ -119,15 +148,9 @@
             transform: 'translateX(50px)', pointerEvents: 'auto',
             maxWidth: '350px', wordWrap: 'break-word'
         });
-
         toast.innerHTML = message;
         container.appendChild(toast);
-
-        setTimeout(() => {
-            toast.style.opacity = '1';
-            toast.style.transform = 'translateX(0)';
-        }, 10);
-
+        setTimeout(() => { toast.style.opacity = '1'; toast.style.transform = 'translateX(0)'; }, 10);
         setTimeout(() => {
             toast.style.opacity = '0';
             toast.style.transform = 'translateX(50px)';
@@ -135,7 +158,101 @@
         }, duration);
     }
 
-    // --- Tablo Yardımcıları ---
+    // ============================================================
+    // GÜNCEL YÜZDE TD - PARSE FONKSİYONLARI
+    // ============================================================
+ /**
+ * 1. Başlık Listesi (Sütun sırasına göre)
+ */
+function getGuncelYuzdeKeys() {
+    return [
+        'Güncel Yüzde',      // result[0]
+        'Alınabilir',        // result[1]
+        'Alınırsa Yüzde',    // result[2]
+        'Gereken',           // result[3]
+        'Alınan',            // result[4]
+        'Alınmayan',         // result[5]
+        'Eşleştirme Yapılmamış' // result[6]
+    ];
+}
+
+/**
+ * 2. TD İçeriğini Ayrıştırma
+ */
+function parseGuncelYuzdeTd(td) {
+    // 7 farklı veri alanı için boş dizi (getGuncelYuzdeKeys uzunluğu kadar)
+    const result = ["", "", "", "", "", "", ""];
+
+    // A. Güncel Yüzde (%69 gibi)
+    const valueText = td.querySelector('.value-text');
+    result[0] = valueText ? valueText.innerText.trim() : '';
+
+    // B. Alınabilir ve Alınırsa (Panel dışında, yeşil/kırmızı kutuda)
+    // Regex ile "Alınabilir: 11" ve "Alınırsa: %85" değerlerini çekiyoruz
+    const alinabilirMatch = td.innerText.match(/Alınabilir\s*:\s*(\d+)/i);
+    if (alinabilirMatch) result[1] = alinabilirMatch[1];
+
+    const alinirsaMatch = td.innerText.match(/Alınırsa\s*:\s*(%?\d+)/i);
+    if (alinirsaMatch) result[2] = alinirsaMatch[1];
+
+    // C. Bilgi Paneli İçindeki Detaylar (Gereken, Alınan, Alınmayan)
+    const panel = td.querySelector('.bilgi-paneli');
+    if (panel) {
+        const panelText = panel.innerText;
+
+        // Gereken
+        const gerekenM = panelText.match(/Gereken\s*:\s*(\d+)/i);
+        if (gerekenM) result[3] = gerekenM[1];
+
+        // Alınan
+        const alinanM = panelText.match(/Alınan\s*:\s*(\d+)/i);
+        if (alinanM) result[4] = alinanM[1];
+
+        // Alınmayan
+        const alinmayanM = panelText.match(/Alınmayan\s*:\s*(\d+)/i);
+        if (alinmayanM) result[5] = alinmayanM[1];
+
+        // Eşleştirme Yapılmamış
+        const eslesmeM = panelText.match(/Eşleştirme Yapılmamış\s*:\s*(\d+)/i);
+        if (eslesmeM) result[6] = eslesmeM[1];
+    }
+
+    return result;
+}
+
+/**
+ * 3. Tablodaki Sütun İndeksini Bulma
+ */
+function findGuncelYuzdeColIndex(tableElement) {
+    if (!tableElement) return -1;
+    const firstRow = tableElement.querySelector('tbody tr');
+    if (!firstRow) return -1;
+    return Array.from(firstRow.querySelectorAll('td'))
+                .findIndex(td => td.classList.contains('guncel-yuzde-td'));
+}
+
+/**
+ * 4. Başlıkları Genişletme
+ */
+function getExpandedHeaders(tableElement) {
+    const ths = Array.from(tableElement?.querySelectorAll("thead th") || []);
+    const guncelIdx = findGuncelYuzdeColIndex(tableElement);
+    let headers = [];
+
+    ths.forEach((th, i) => {
+        if (i === guncelIdx) {
+            // "Güncel Yüzde" sütunu yerine parçalanmış alt başlıkları ekle
+            headers.push(...getGuncelYuzdeKeys());
+        } else {
+            headers.push(th.innerText.trim() || ("Sütun " + (i + 1)));
+        }
+    });
+    return headers;
+}
+
+    // ============================================================
+    // TABLO YARDIMCILARI
+    // ============================================================
     function getActiveTable() {
         const priorityIds = ['gridOgrencilerimListesi', 'CetGridKursListesi', 'gridSporcular'];
         for (let id of priorityIds) {
@@ -169,13 +286,22 @@
     function getTableRows(includeHeader, tableElement, selectedIndices = null, appliedFilters = [], antrenorAdi = "") {
         if (!tableElement) return [];
         let rows = [];
+        const guncelColIdx = findGuncelYuzdeColIndex(tableElement);
 
         if (includeHeader) {
             const headRows = Array.from(tableElement.querySelectorAll("thead tr"));
             headRows.forEach(row => {
-                let allCols = Array.from(row.querySelectorAll("th")).map(col => col.innerText.trim());
+                let allCols = [];
+                Array.from(row.querySelectorAll("th")).forEach((th, i) => {
+                    if (i === guncelColIdx) {
+                        allCols.push(...getGuncelYuzdeKeys());
+                    } else {
+                        allCols.push(th.innerText.trim());
+                    }
+                });
                 let filteredCols = selectedIndices ? allCols.filter((_, idx) => selectedIndices.includes(idx)) : allCols;
                 if (filteredCols.length > 0) {
+                    // FIX 11: Sadece antrenorAdi varsa baslik ekle
                     if (antrenorAdi) filteredCols.push("Antrenör Ad Soyad");
                     rows.push(filteredCols);
                 }
@@ -184,26 +310,32 @@
 
         const tbodyRows = Array.from(tableElement.querySelectorAll("tbody tr"));
         tbodyRows.forEach(row => {
-            if (row.classList.contains('no-records-found') || row.innerText.includes("kayıttan") || row.innerText.includes("Yükleniyor")) return;
+            if (row.classList.contains('no-records-found') || row.innerText.includes("kayittan") || row.innerText.includes("Yükleniyor")) return;
 
-            let allCells = Array.from(row.querySelectorAll("td")).map(col => col.innerText.trim());
+            let allCells = [];
+            Array.from(row.querySelectorAll("td")).forEach((td, i) => {
+                if (i === guncelColIdx) {
+                    allCells.push(...parseGuncelYuzdeTd(td));
+                } else {
+                    allCells.push(td.innerText.trim());
+                }
+            });
 
             let passesFilters = true;
             for (let f of appliedFilters) {
-                let cellText = (allCells[f.colIdx] || "").trim();
+                let cellText = (allCells[f.colIdx] || "");
                 let searchVal1 = (f.val1 || "").trim();
                 let searchVal2 = (f.val2 || "").trim();
-
-                let cellTextLower = cellText.toLocaleLowerCase('tr-TR');
-                let searchVal1Lower = searchVal1.toLocaleLowerCase('tr-TR');
+                let cleanCellText = cellText.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+                let cleanSearchVal = searchVal1.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+                let cellTextLower = cleanCellText.toLocaleLowerCase('tr-TR');
+                let searchVal1Lower = cleanSearchVal.toLocaleLowerCase('tr-TR');
 
                 if (f.type === 'contains') {
                     if (!cellTextLower.includes(searchVal1Lower)) passesFilters = false;
-                }
-                else if (f.type === 'not_contains') {
+                } else if (f.type === 'not_contains') {
                     if (cellTextLower.includes(searchVal1Lower)) passesFilters = false;
-                }
-                else if (['between', 'greater', 'less'].includes(f.type)) {
+                } else if (['between', 'greater', 'less'].includes(f.type)) {
                     let parseDate = (str) => {
                         if (!str) return null;
                         let m = str.match(/(\d{2})[-./](\d{2})[-./](\d{4})/);
@@ -214,36 +346,27 @@
                         let m = str.match(/(\d{2})[:.](\d{2})/);
                         return m ? parseInt(m[1] + m[2]) : null;
                     };
-
-                    let v1Date = parseDate(searchVal1);
-                    let v1Time = parseTime(searchVal1);
+                    let v1Date = parseDate(searchVal1), v1Time = parseTime(searchVal1);
 
                     if (v1Date !== null) {
-                        let cDate = parseDate(cellText);
-                        let v2Date = parseDate(searchVal2);
+                        let cDate = parseDate(cellText), v2Date = parseDate(searchVal2);
                         if (cDate === null) passesFilters = false;
                         else if (f.type === 'between' && (cDate < v1Date || cDate > v2Date)) passesFilters = false;
                         else if (f.type === 'greater' && cDate < v1Date) passesFilters = false;
                         else if (f.type === 'less' && cDate > v1Date) passesFilters = false;
-                    }
-                    else if (v1Time !== null) {
-                        let cTime = parseTime(cellText);
-                        let v2Time = parseTime(searchVal2);
+                    } else if (v1Time !== null) {
+                        let cTime = parseTime(cellText), v2Time = parseTime(searchVal2);
                         if (cTime === null) passesFilters = false;
                         else if (f.type === 'between' && (cTime < v1Time || cTime > v2Time)) passesFilters = false;
                         else if (f.type === 'greater' && cTime < v1Time) passesFilters = false;
                         else if (f.type === 'less' && cTime > v1Time) passesFilters = false;
-                    }
-                    else {
-                        let cleanedStr = cellText.replace(/[^0-9,\.-]/g, '');
-                        cleanedStr = cleanedStr.replace(/\./g, '').replace(',', '.');
+                    } else {
+                        let cleanedStr = cellText.replace(/[^0-9,\.-]/g, '').replace(/\./g, '').replace(',', '.');
                         let cellNum = parseFloat(cleanedStr);
                         let num1 = parseFloat(searchVal1.replace(/\./g, '').replace(',', '.'));
                         let num2 = parseFloat(searchVal2.replace(/\./g, '').replace(',', '.'));
-
-                        if (isNaN(cellNum)) {
-                            passesFilters = false;
-                        } else {
+                        if (isNaN(cellNum)) { passesFilters = false; }
+                        else {
                             if (f.type === 'between' && (isNaN(num1) || isNaN(num2) || cellNum < num1 || cellNum > num2)) passesFilters = false;
                             else if (f.type === 'greater' && (isNaN(num1) || cellNum < num1)) passesFilters = false;
                             else if (f.type === 'less' && (isNaN(num1) || cellNum > num1)) passesFilters = false;
@@ -263,6 +386,9 @@
         return rows;
     }
 
+    // ============================================================
+    // EXCEL / CSV OLUSTURUCU
+    // ============================================================
     async function generateExcel(data, fileName, useExcelJS) {
         if (!useExcelJS || typeof ExcelJS === 'undefined') {
             let csvContent = "\uFEFF";
@@ -279,7 +405,6 @@
             document.body.removeChild(link);
             return;
         }
-
         try {
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Veri Listesi');
@@ -290,7 +415,7 @@
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF31708F' } };
                 cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
                 cell.alignment = { vertical: 'middle', horizontal: 'center' };
-                cell.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
+                cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
             });
 
             worksheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: data[0].length } };
@@ -298,15 +423,9 @@
             worksheet.columns.forEach(column => {
                 let maxL = 0;
                 column.eachCell({ includeEmpty: true }, (c, rowNumber) => {
-                    if (rowNumber > 1) {
-                        c.alignment = { wrapText: true, vertical: 'top', horizontal: 'left' };
-                    }
+                    if (rowNumber > 1) c.alignment = { wrapText: true, vertical: 'top', horizontal: 'left' };
                     if (c.value) {
-                        let text = c.value.toString();
-                        let lines = text.split('\n');
-                        lines.forEach(line => {
-                            if (line.length > maxL) maxL = line.length;
-                        });
+                        c.value.toString().split('\n').forEach(line => { if (line.length > maxL) maxL = line.length; });
                     }
                 });
                 column.width = Math.min(Math.max(maxL + 4, 12), 60);
@@ -314,20 +433,87 @@
 
             const buffer = await workbook.xlsx.writeBuffer();
             saveAs(new Blob([buffer]), fileName + ".xlsx");
-            showToast("✅ Gelişmiş Excel (.xlsx) başarıyla oluşturuldu!", "success");
+            showToast("✅ Gelismis Excel (.xlsx) basariyla olusturuldu!", "success");
         } catch (e) {
-            console.error("Excel Hatası:", e);
-            showToast("❌ Excel oluşturulurken hata oluştu. Lütfen konsolu kontrol edin.", "error");
+            console.error("Excel Hatasi:", e);
+            showToast("❌ Excel olusturulurken hata olustu. Konsolu kontrol edin.", "error");
+            throw e; // FIX 8: hatayı üst catch'e ilet
         }
     }
 
-    // --- Ana Aktarım Döngüsü ---
+    // ============================================================
+    // FIX 6: GÜVENLİ bootstrapTable ÇAĞIRICI
+    // ============================================================
+    function callBootstrapTable(tableId, method, arg) {
+        // ID'yi güvenli hale getir (XSS önlemi)
+        const safeId = tableId.replace(/['"\\`<>]/g, '');
+
+        // unsafeWindow üzerinden dogrudan çagir (tercih edilen yöntem)
+        if (typeof unsafeWindow !== 'undefined' && unsafeWindow.$) {
+            try {
+                if (arg !== undefined) {
+                    unsafeWindow.$('#' + safeId).bootstrapTable(method, arg);
+                } else {
+                    unsafeWindow.$('#' + safeId).bootstrapTable(method);
+                }
+                return;
+            } catch (e) { /* fallback'e geç */ }
+        }
+
+        // Fallback: script injection (ID temizlenmis)
+        const argStr = arg !== undefined ? `, ${JSON.stringify(arg)}` : '';
+        const script = document.createElement('script');
+        script.textContent = `try { $('#${safeId}').bootstrapTable('${method}'${argStr}); } catch(e) { console.warn('bootstrapTable:', e); }`;
+        document.body.appendChild(script);
+        script.remove();
+    }
+
+    // ============================================================
+    // FIX 9: İLERLEME GÖSTERGESİ
+    // ============================================================
+    (function injectProgressCSS() {
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes gsb-slide {
+                from { background-position: 0 0; }
+                to { background-position: 80px 0; }
+            }
+        `;
+        document.head.appendChild(style);
+    })();
+
+    function updateFloatingBtnText(text) {
+        const span = document.getElementById('gsb-floating-btn-text');
+        if (span) span.innerHTML = text;
+    }
+
+    function updateProgress(current, total, rowCount) {
+        updateFloatingBtnText(`⏳ Sayfa:${current}${(total && total !== Infinity) ? '/' + total : ''} 🛑 Durdur`);
+        const progressBar = document.getElementById('gsb-progress-bar-inner');
+        if (!progressBar) return;
+        if (total && total !== Infinity) {
+            progressBar.style.animation = 'none';
+            progressBar.style.backgroundImage = 'none';
+            progressBar.style.backgroundColor = '#2ecc71';
+            progressBar.style.width = Math.round((current / total) * 100) + '%';
+        } else {
+            progressBar.style.width = '100%';
+            progressBar.style.backgroundImage = 'repeating-linear-gradient(90deg, #2ecc71 0px, #27ae60 20px, #2ecc71 40px)';
+            progressBar.style.backgroundSize = '80px 100%';
+            progressBar.style.animation = 'gsb-slide 1s linear infinite';
+        }
+    }
+
+    // ============================================================
+    // ANA İNDİRME FONKSİYONU
+    // ============================================================
     async function startDownload(startPage, endPage, useExcelJS, isCurrentOnly = false) {
         if (isRunning) return;
 
         let activeTable = getActiveTable();
-        if (!activeTable) { showToast("⚠️ Ekranda indirilecek tablo bulunamadı!", "error"); return; }
+        if (!activeTable) { showToast("⚠️ Ekranda indirilecek tablo bulunamadi!", "error"); return; }
 
+        // FIX 3: Genisletilmis başlik indekslerini kullan
         let selectedIndices = null;
         const colCheckboxes = document.querySelectorAll('.gsb-col-checkbox');
         if (document.getElementById('gsb-use-columns')?.checked) {
@@ -343,8 +529,11 @@
 
         try {
             isRunning = true;
+            stopRequested = false;
             const floatingBtn = document.getElementById('gsb-floating-btn');
-            showToast("⏳ Tarama başlıyor... Lütfen bekleyin.", "info", 4000);
+            if (floatingBtn) floatingBtn.style.backgroundColor = '#f39c12';
+
+            showToast("⏳ Tarama basliyor... Lütfen bekleyin.", "info", 4000);
 
             let currentAntrenorAdi = "";
             const lblAntrenor = document.getElementById('lblAntrenorAdSoyad');
@@ -355,72 +544,110 @@
             const activeTabPane = document.querySelector('.tab-pane.active.in') || document.querySelector('.tab-pane.active') || document;
             const tableContainer = activeTable.closest('.bootstrap-table') || activeTabPane;
 
+            // FIX 1 + 4 + 7: Düzeltilmis bekleme fonksiyonu
             async function waitForDataChange(oldRawSignature, maxWait = 25) {
                 let i = 0;
                 let absoluteTimeout = 0;
 
                 while (i < maxWait && absoluteTimeout < 50) {
+                    if (stopRequested) return null;
+
                     await new Promise(r => setTimeout(r, 400));
                     absoluteTimeout++;
 
+                    // FIX 4: null kontrolü eklendi
                     let tbl = getActiveTable();
+                    if (!tbl) { i++; continue; }
+
                     let newSig = getPageRawSignature(tbl);
 
                     if (waitMode === 'auto') {
                         let isLoading = false;
                         const loaders = tableContainer.querySelectorAll('.fixed-table-loading, .blockOverlay, .loading-message');
-                        loaders.forEach(l => {
-                            if (l.offsetWidth > 0 && l.offsetHeight > 0) isLoading = true;
-                        });
+                        loaders.forEach(l => { if (l.offsetWidth > 0 && l.offsetHeight > 0) isLoading = true; });
                         if (isLoading) continue;
                     }
 
-                    if (tbl && newSig !== oldRawSignature && newSig !== "") {
+                    if (newSig !== oldRawSignature && newSig !== "") {
                         await new Promise(r => setTimeout(r, 400));
                         return newSig;
                     }
 
                     i++;
 
-                    if (i >= maxWait && waitMode === 'manual') {
-                        let userWantsToFinish = confirm("⏳ ZAMAN AŞIMI! (Veri değişmedi)\n\nİnternet bağlantınız yavaş olabilir veya sayfanın yüklenmesi hala tamamlanmadı.\n\nİndirmeyi BİTİRİP şimdiye kadar olanları Excel'e aktarmak için: [TAMAM / OK]\nBeklemeye DEVAM ETMEK için: [İPTAL / CANCEL] tuşuna basın.");
+                    if (i >= maxWait && waitMode === 'manual' && !stopRequested) {
+                        // FIX 7: confirm() yerine async modal
+                        const userWantsToFinish = await showConfirmModal(
+                            "⏳ <b>ZAMAN ASIMI!</b> Veri degismedi.<br><br>" +
+                            "İnternet yavas olabilir veya sayfa hâlâ yükleniyor.<br><br>" +
+                            "<b>Bitir / İndir:</b> Simdilik çekilen veriyi kaydet.<br>" +
+                            "<b>Beklemeye Devam:</b> Daha fazla bekle."
+                        );
                         if (!userWantsToFinish) {
+                            // FIX 1: Her iki sayaci da sıfırla
                             i = 0;
                             absoluteTimeout = 0;
+                        } else {
+                            stopRequested = true;
                         }
                     }
                 }
                 return null;
             }
 
-            // GÜNCELLEME 1: Dinamik Kayıt Sayısı Seçimi (Önceki 100 limiti yerine)
-            if (endPage === Infinity && activeTable) {
-                const dropDownLinks = Array.from(tableContainer.querySelectorAll('.page-list .dropdown-menu li a'));
-
-                if (dropDownLinks.length > 0) {
-                    // Dropdown listesindeki en son elemanı seç (En yüksek rakam veya Tümü)
-                    const maxLink = dropDownLinks[dropDownLinks.length - 1];
-                    let maxText = maxLink.innerText.trim() || 'Maks';
-
-                    if (floatingBtn) floatingBtn.innerHTML = `⏳ ${maxText} Kayıt Seçiliyor...`;
-
-                    if (!maxLink.parentElement.classList.contains('active')) {
-                        let preMaxSig = getPageRawSignature(activeTable);
-                        maxLink.click();
-                        await waitForDataChange(preMaxSig, 25);
-                        activeTable = getActiveTable();
-                    }
-                } else {
-                    if (floatingBtn) floatingBtn.innerHTML = `⏳ Sayfa Ayarlanıyor...`;
+            // Tüm sayfalarda 100 kayit/sayfa moduna geç
+            if (endPage === Infinity && activeTable && !stopRequested) {
+                updateFloatingBtnText(`⏳ 100 Kayıt...`);
+                const maxLink = Array.from(tableContainer.querySelectorAll('.page-list .dropdown-menu li a')).find(a => a.innerText.trim() === '100');
+                if (maxLink && !maxLink.parentElement.classList.contains('active')) {
+                    let pre100Sig = getPageRawSignature(activeTable);
+                    maxLink.click();
+                    await waitForDataChange(pre100Sig, 25);
+                    activeTable = getActiveTable();
                 }
             }
 
+            // ✔ 100 kayıt modundan sonra gerçek sayfa sayısını oku
+let totalPages = null;
+
+if (endPage === Infinity) {
+
+    const pagination = tableContainer.querySelector('.pagination') || document.querySelector('.pagination');
+
+    if (pagination) {
+
+        let last = pagination.querySelector('.page-last a');
+
+        if (last) {
+
+            const n = parseInt(last.innerText.trim());
+            if (!isNaN(n)) totalPages = n;
+
+        }
+
+        if (!totalPages) {
+
+            const nums = Array.from(
+                pagination.querySelectorAll('li.page-number a')
+            )
+            .map(a => parseInt(a.innerText.trim()))
+            .filter(n => !isNaN(n));
+
+            if (nums.length) {
+                totalPages = Math.max(...nums);
+            }
+
+        }
+
+    }
+
+}
             let allData = [];
             let pagesScraped = 0;
 
             let initialSig = getPageRawSignature(activeTable);
             let emptyCheckCounter = 0;
-            while(initialSig === "" && emptyCheckCounter < 10) {
+            while (initialSig === "" && emptyCheckCounter < 10 && !stopRequested) {
                 await new Promise(r => setTimeout(r, 500));
                 activeTable = getActiveTable();
                 initialSig = getPageRawSignature(activeTable);
@@ -432,104 +659,152 @@
             let currentUIPage = activeBtn ? parseInt(activeBtn.innerText.trim()) : 1;
             if (isNaN(currentUIPage)) currentUIPage = 1;
 
-            if (!isCurrentOnly && startPage > 1 && startPage !== currentUIPage) {
-                if (floatingBtn) floatingBtn.innerHTML = `⏳ ${startPage}. Sayfaya Atlanıyor...`;
-                let targetBtn = Array.from(tableContainer.querySelectorAll('.pagination li a')).find(a => parseInt(a.innerText.trim()) === startPage);
-
-                if (activeTable.id) {
-                    const script = document.createElement('script');
-                    script.textContent = `try { $('#${activeTable.id}').bootstrapTable('selectPage', ${startPage}); } catch(e) {}`;
-                    document.body.appendChild(script);
-                    script.remove();
-                } else if (targetBtn) {
-                    targetBtn.click();
+            if (!isCurrentOnly && startPage > 1 && startPage !== currentUIPage && !stopRequested) {
+                updateFloatingBtnText(`⏳ ${startPage}. Sayfaya Atlaniyor...`);
+                let tbl = getActiveTable();
+                if (tbl && tbl.id) {
+                    callBootstrapTable(tbl.id, 'selectPage', startPage); // FIX 6
+                } else {
+                    let targetBtn = Array.from(tableContainer.querySelectorAll('.pagination li a')).find(a => parseInt(a.innerText.trim()) === startPage);
+                    if (targetBtn) targetBtn.click();
                 }
-
                 let newSig = await waitForDataChange(currentRawSignature, 25);
-                if (!newSig) showToast(`⚠️ Sayfaya atlama doğrulanamadı. Elimizdeki veriyi indiriyoruz.`, "warning");
-                else currentRawSignature = newSig;
+if (newSig) currentRawSignature = newSig;
             }
 
             let currentPageNum = isCurrentOnly ? 1 : startPage;
-            let targetEndPage = isCurrentOnly ? 1 : endPage;
+            let targetEndPage = isCurrentOnly ? 1 : (endPage === Infinity && totalPages ? totalPages : endPage);
+
 
             while (currentPageNum <= targetEndPage) {
-                if (floatingBtn && !isCurrentOnly) floatingBtn.innerHTML = `⏳ Sayfa: ${currentPageNum}...`;
+                if (stopRequested) break;
+
+                // FIX 9: İlerleme güncelle
+                if (!isCurrentOnly) updateProgress(currentPageNum, totalPages, allData.length);
 
                 let rowsToSave = getTableRows(pagesScraped === 0, getActiveTable(), selectedIndices, currentActiveFilters, currentAntrenorAdi);
                 allData = allData.concat(rowsToSave);
                 pagesScraped++;
 
-                if (currentPageNum >= targetEndPage) break;
+                // FIX 12: Büyük veri uyarisi
+                if (allData.length > 0 && allData.length % 5000 === 0) {
+                    showToast(`⚠️ ${allData.length} satir bellekte tutuluyor. Tarayici yavaslyabilir.`, "warning", 5000);
+                }
+
+                if (currentPageNum >= targetEndPage || stopRequested) break;
 
                 let nextBtn = tableContainer.querySelector('.pagination li.page-next a, .pagination li.next a');
                 let nextLi = nextBtn ? nextBtn.closest('li') : null;
-
-                // GÜNCELLEME 2: Son sayfa UX Kontrolü
-                if (!nextBtn || (nextLi && nextLi.classList.contains('disabled'))) {
-                    if (floatingBtn) floatingBtn.innerHTML = `⏳ Son sayfa kontrolü yapılıyor...`;
-                    await new Promise(r => setTimeout(r, 800)); // Okuması için kısa bekleme
-                    break;
-                }
-
-                if (floatingBtn) floatingBtn.innerHTML = `⏳ ${currentPageNum + 1}. Sayfaya Geçiliyor...`;
+                if (!nextBtn || (nextLi && nextLi.classList.contains('disabled'))) break;
 
                 let tbl = getActiveTable();
                 if (tbl && tbl.id) {
-                    const script = document.createElement('script');
-                    script.textContent = `try { $('#${tbl.id}').bootstrapTable('nextPage'); } catch(e) {}`;
-                    document.body.appendChild(script);
-                    script.remove();
+                    callBootstrapTable(tbl.id, 'nextPage'); // FIX 6
                 } else {
                     nextBtn.click();
                 }
 
                 let newSig = await waitForDataChange(currentRawSignature, 25);
-                if (!newSig) {
-                    if (floatingBtn) floatingBtn.innerHTML = `⏳ Son sayfa kontrolü yapılıyor...`;
-                    showToast(`⚠️ Sayfa değişmedi, son sayfaya ulaşılmış olabilir. Mevcut liste indiriliyor.`, "info");
-                    break;
-                }
+                if (stopRequested) break;
                 currentRawSignature = newSig;
                 currentPageNum++;
             }
 
             if (allData.length > 0) {
-                // Excel hazırlama sürecini göster
-                if (floatingBtn) floatingBtn.innerHTML = `⏳ Excel Dosyası Hazırlanıyor...`;
-                const tabName = document.querySelector('.nav-tabs li.active a')?.innerText.trim().replace(/[^a-zA-Z0-9]/g, '_') || 'GSB_Veri';
-                let rangeText = isCurrentOnly ? "TekSayfa" : (endPage === Infinity ? "TumSayfalar" : `Sayfa${startPage}-${startPage + pagesScraped - 1}`);
-                const fileName = `${tabName}_${rangeText}_${new Date().toLocaleDateString().replace(/\./g,'-')}`;
+                let tarih = new Date().toLocaleDateString('tr-TR').replace(/\./g, '-');
+                let parts = [];
+
+                let breadcrumbItems = document.querySelectorAll('.breadcrumb li');
+                if (breadcrumbItems.length > 0) {
+                    let lastBreadcrumb = breadcrumbItems[breadcrumbItems.length - 1].innerText.trim();
+                    if (lastBreadcrumb) parts.push(lastBreadcrumb);
+                }
+
+                if (currentAntrenorAdi) parts.push(currentAntrenorAdi);
+
+                const getInputVal = (id) => { const el = document.getElementById(id); return el && el.value ? el.value.trim() : ''; };
+                const getSelectText = (id) => {
+                    const el = document.getElementById(id);
+                    if (el && el.selectedIndex >= 0) {
+                        let text = el.options[el.selectedIndex].text.trim();
+                        if (text && text !== 'Seçiniz' && text !== 'Tümü' && text !== '') return text;
+                    }
+                    return '';
+                };
+
+                parts.push(getInputVal('txtSporcuTcKimlikNo'));
+                parts.push(getInputVal('txtSporcuAdi'));
+                parts.push(getInputVal('txtSporcuSoyadi'));
+                parts.push(getSelectText('ctl00_MainContent_UcSelectGorev_ddl1'));
+                parts.push(getSelectText('ctl00_MainContent_UcSelectIl_ddl1'));
+                parts.push(getSelectText('ctl00_MainContent_UcSelectIlce_ddl1'));
+                parts.push(getSelectText('ctl00_MainContent_UcSelectProje_ddl1'));
+                parts.push(getSelectText('ctl00_MainContent_UcSelectFederasyon_ddl1'));
+                parts.push(tarih);
+                parts = parts.filter(Boolean);
+
+                let fileName = parts.join('_').replace(/[^a-zA-Z0-9_ğüşöçıİĞÜŞÖÇI -]/g, '').replace(/\s+/g, '_');
+                if (!fileName || fileName === tarih) fileName = 'GSB_Veri_' + tarih;
+
+                if (stopRequested) showToast("✅ İslem durduruldu. Çekilen veriler kaydediliyor...", "success");
+
                 await generateExcel(allData, fileName, downloadFormat === 'xlsx');
             } else {
-                showToast("Filtrelere uyan hiçbir veri bulunamadı.", "warning");
+                showToast("Filtrelere uyan hiçbir veri bulunamadi.", "warning");
             }
+
+        } catch (e) {
+            // FIX 8: Beklenmeyen hatalar için kullaniciyi bilgilendir
+            console.error("SBS Excel - Beklenmeyen Hata:", e);
+            showToast("❌ Beklenmeyen bir hata olustu. Konsolu kontrol edin. (F12)", "error", 7000);
         } finally {
             isRunning = false;
+            stopRequested = false;
             const fb = document.getElementById('gsb-floating-btn');
-            if (fb) fb.innerHTML = '⚙️ Excel Aktarım';
+            if (fb) {
+                fb.style.backgroundColor = '#1d6f42';
+                updateFloatingBtnText('⚙️ Excel');
+                const pb = document.getElementById('gsb-progress-bar-inner');
+                if (pb) {
+                    pb.style.width = '0%';
+                    pb.style.animation = 'none';
+                    pb.style.backgroundImage = 'none';
+                    pb.style.backgroundColor = '#2ecc71';
+                }
+            }
         }
     }
 
-    // --- Modal Menü ---
+    // ============================================================
+    // MODAL MENÜ
+    // ============================================================
     function showModal() {
         if (document.getElementById('gsb-modal-overlay')) return;
 
-        globalFilters = [];
+        // FIX 5: localStorage yerine GM_getValue kullan
         let savedPresets = {};
         try {
-            savedPresets = JSON.parse(localStorage.getItem('gsb_filter_presets')) || {};
-        } catch(e) { console.warn("Filtre geçmişi okunamadı."); }
+            savedPresets = JSON.parse(GM_getValue('gsb_filter_presets', '{}')) || {};
+        } catch (e) { console.warn("Filtre sablonlari okunamadi."); }
 
         const table = getActiveTable();
-        const headers = Array.from(table?.querySelectorAll("thead th") || []).map((th, i) => th.innerText.trim() || ("Sütun " + (i + 1)));
+        // FIX 3 + 10: Genisletilmis baslikları kullan
+        const headers = getExpandedHeaders(table);
 
         const overlay = document.createElement('div');
         overlay.id = 'gsb-modal-overlay';
-        Object.assign(overlay.style, { position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.8)', zIndex: '2147483647', display: 'flex', justifyContent: 'center', alignItems: 'center' });
+        Object.assign(overlay.style, {
+            position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh',
+            backgroundColor: 'rgba(0,0,0,0.8)', zIndex: '2147483647',
+            display: 'flex', justifyContent: 'center', alignItems: 'center'
+        });
 
         const modal = document.createElement('div');
-        Object.assign(modal.style, { backgroundColor: '#fff', padding: '20px', borderRadius: '12px', width: '420px', maxHeight: '90vh', overflowY: 'auto', position: 'relative', fontFamily: 'Segoe UI, sans-serif' });
+        Object.assign(modal.style, {
+            backgroundColor: '#fff', padding: '20px', borderRadius: '12px',
+            width: '420px', maxHeight: '90vh', overflowY: 'auto',
+            position: 'relative', fontFamily: 'Segoe UI, sans-serif'
+        });
 
         let columnListHtml = headers.map((h, i) => `
             <div style="display:flex; align-items:center; margin-bottom:5px; font-size:13px;">
@@ -541,11 +816,11 @@
         let filterOptionsHtml = headers.map((h, i) => `<option value="${i}">${h}</option>`).join('');
 
         modal.innerHTML = `
-            <h3 style="margin:0 0 15px 0; color:#1d6f42; text-align:center;">📊 Excel Aktarım </h3>
+            <h3 style="margin:0 0 15px 0; color:#1d6f42; text-align:center;">📊 Excel</h3>
 
             <div style="background:#f9f9f9; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #eee;">
                 <label style="display:flex; align-items:center; cursor:pointer; font-weight:bold; color:#333; font-size:13px;">
-                    <input type="checkbox" id="gsb-use-columns" style="margin-right:10px;"> Sütunları Gizle / Seç
+                    <input type="checkbox" id="gsb-use-columns" style="margin-right:10px;"> Sütunlari Gizle / Seç
                 </label>
                 <div id="gsb-column-selector" style="display:none; margin-top:10px; border-top:1px solid #ddd; padding-top:10px;">
                     <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
@@ -558,25 +833,25 @@
 
             <div style="background:#eef7f2; padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #cce3d6;">
                 <label style="display:flex; align-items:center; cursor:pointer; font-weight:bold; color:#1d6f42; font-size:13px;">
-                    <input type="checkbox" id="gsb-use-filters" style="margin-right:10px;"> Gelişmiş Filtre Ekle
+                    <input type="checkbox" id="gsb-use-filters" style="margin-right:10px;"> Gelismis Filtre Ekle
                 </label>
                 <div id="gsb-filter-panel" style="display:none; margin-top:10px; border-top:1px solid #cce3d6; padding-top:10px;">
                     <select id="gsb-filter-col" style="width:100%; padding:6px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc; font-size:12px;">${filterOptionsHtml}</select>
-                    <select id="gsb-filter-type" style="width:100%; padding:6px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc; font-size:12px;">
-                        <option value="contains">Şunu İçeriyorsa (Metin)</option>
-                        <option value="not_contains">Şunu İçermiyorsa (Metin)</option>
-                        <option value="between">Şu Aralıkta İse (Tarih, Saat, Sayı)</option>
+                    <select id="gsb-filter-type" style="width:100%; padding:6px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc; font-size:12px; background:#fff; color:#333;">
+                        <option value="" disabled>-- Kural Tipi Seçin --</option>
+                        <option value="contains" selected>Sunu İçeriyorsa (Metin)</option>
+                        <option value="not_contains">Sunu İçermiyorsa (Metin)</option>
+                        <option value="between">Su Aralikta İse (Tarih, Saat, Sayi)</option>
                         <option value="greater">Büyük veya Sonra İse (>=)</option>
                         <option value="less">Küçük veya Önce İse (<=)</option>
                     </select>
-                    <input type="text" id="gsb-filter-val1" placeholder="Değer 1" style="width:100%; padding:6px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc; font-size:12px;">
-                    <input type="text" id="gsb-filter-val2" placeholder="Değer 2 (Sadece Aralık için)" style="width:100%; padding:6px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc; font-size:12px; display:none;">
-                    <button id="gsb-add-filter-btn" style="width:100%; padding:6px; background:#1d6f42; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">➕ Kuralı Ekle</button>
-
+                    <input type="text" id="gsb-filter-val1" placeholder="Deger 1" style="width:100%; padding:6px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc; font-size:12px; box-sizing:border-box;">
+                    <input type="text" id="gsb-filter-val2" placeholder="Deger 2 (Sadece Aralik için)" style="width:100%; padding:6px; margin-bottom:5px; border-radius:4px; border:1px solid #ccc; font-size:12px; display:none; box-sizing:border-box;">
+                    <button id="gsb-add-filter-btn" style="width:100%; padding:6px; background:#1d6f42; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">➕ Kurali Ekle</button>
                     <ul id="gsb-active-filters-list" style="list-style:none; padding-left:0; margin-top:10px; margin-bottom:0; font-size:11px; color:#555;"></ul>
 
                     <div style="margin-top:10px; border-top:1px dashed #9bc2aa; padding-top:10px;">
-                        <div style="font-size:12px; font-weight:bold; color:#1d6f42; margin-bottom:5px;">💾 Kayıtlı Şablonlar</div>
+                        <div style="font-size:12px; font-weight:bold; color:#1d6f42; margin-bottom:5px;">💾 Kayitli Sablonlar</div>
                         <div style="display:flex; gap:5px; margin-bottom:5px;">
                             <input type="text" id="gsb-preset-name" placeholder="Filtre grubuna isim ver" style="flex:1; padding:6px; font-size:11px; border:1px solid #ccc; border-radius:4px;">
                             <button id="gsb-save-preset-btn" style="padding:6px 12px; background:#3498db; color:white; border:none; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold;">Kaydet</button>
@@ -590,15 +865,14 @@
                 </div>
             </div>
 
-            <button id="gsb-btn-one" style="width:100%; padding:10px; margin-bottom:8px; background:#3498db; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">📄 Sadece Bu Sayfayı İndir</button>
-            <button id="gsb-btn-all" style="width:100%; padding:10px; margin-bottom:15px; background:#2ecc71; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">📑 Tüm Sayfaları İndir</button>
+            <button id="gsb-btn-all" style="width:100%; padding:10px; margin-bottom:15px; background:#2ecc71; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">📑 Tüm Sayfalari İndir</button>
 
-            <div style="border-top:1px solid #eee; padding-top:10px; margin-bottom: 5px;">
-                <div style="font-size:13px; font-weight:bold; color:#555; margin-bottom:8px; text-align:left;">Belirli Sayfa Aralığı:</div>
+            <div style="border-top:1px solid #eee; padding-top:10px; margin-bottom:5px;">
+                <div style="font-size:13px; font-weight:bold; color:#555; margin-bottom:8px; text-align:left;">Belirli Sayfa Araligi:</div>
                 <div style="display:flex; gap:10px; align-items:center;">
-                    <input type="number" id="gsb-input-start" min="1" placeholder="Baştan" style="width:35%; padding:8px; border:1px solid #ccc; border-radius:6px; text-align:center;">
+                    <input type="number" id="gsb-input-start" min="1" value="1" placeholder="Bastan" style="width:35%; padding:8px; border:1px solid #ccc; border-radius:6px; text-align:center;">
                     <span style="color:#777; font-weight:bold;">-</span>
-                    <input type="number" id="gsb-input-end" min="1" placeholder="Sona" style="width:35%; padding:8px; border:1px solid #ccc; border-radius:6px; text-align:center;">
+                    <input type="number" id="gsb-input-end" min="1" value="1" placeholder="Sona" style="width:35%; padding:8px; border:1px solid #ccc; border-radius:6px; text-align:center;">
                     <button id="gsb-btn-custom" style="flex:1; padding:8px 0; background:#f39c12; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">İndir</button>
                 </div>
             </div>
@@ -621,46 +895,43 @@
 
         const filterTypeSelect = document.getElementById('gsb-filter-type');
         const filterVal2Input = document.getElementById('gsb-filter-val2');
-        filterTypeSelect.onchange = (e) => {
-            filterVal2Input.style.display = e.target.value === 'between' ? 'block' : 'none';
-        };
+        filterTypeSelect.onchange = (e) => { filterVal2Input.style.display = e.target.value === 'between' ? 'block' : 'none'; };
 
         function renderFilters() {
             const list = document.getElementById('gsb-active-filters-list');
             list.innerHTML = '';
             globalFilters.forEach((f, idx) => {
-                let colName = headers[f.colIdx] || "Bilinmeyen Sütun";
-                let text = f.type === 'contains' ? `<b>${colName}</b>: '${f.val1}' içeriyorsa` :
-                           f.type === 'not_contains' ? `<b>${colName}</b>: '${f.val1}' içermiyorsa` :
-                           f.type === 'greater' ? `<b>${colName}</b>: ${f.val1} ve büyük/sonra ise` :
-                           f.type === 'less' ? `<b>${colName}</b>: ${f.val1} ve küçük/önce ise` :
-                           `<b>${colName}</b>: ${f.val1} ile ${f.val2} arasındaysa`;
+                let colName = headers[f.colIdx] || ("Sütun " + (f.colIdx + 1));
+                let text = "";
+                if (f.type === 'contains') text = `<b>${colName}</b>: '${f.val1}' içeriyorsa`;
+                else if (f.type === 'not_contains') text = `<b>${colName}</b>: '${f.val1}' içermiyorsa`;
+                else if (f.type === 'greater') text = `<b>${colName}</b>: ${f.val1} ve büyük/sonra ise`;
+                else if (f.type === 'less') text = `<b>${colName}</b>: ${f.val1} ve küçük/önce ise`;
+                else text = `<b>${colName}</b>: ${f.val1} ile ${f.val2} arasindaysa`;
 
                 let li = document.createElement('li');
                 li.style.cssText = "display:flex; justify-content:space-between; background:#fff; padding:4px 8px; margin-bottom:4px; border-radius:4px; border:1px solid #ddd;";
                 li.innerHTML = `<span>${text}</span> <span style="color:red; cursor:pointer; font-weight:bold;" data-idx="${idx}">X</span>`;
                 list.appendChild(li);
             });
-
             list.querySelectorAll('span[data-idx]').forEach(btn => {
-                btn.onclick = function() {
-                    globalFilters.splice(this.getAttribute('data-idx'), 1);
+                btn.onclick = function () {
+                    globalFilters.splice(parseInt(this.getAttribute('data-idx')), 1);
                     renderFilters();
                 };
             });
         }
+
+        renderFilters();
 
         document.getElementById('gsb-add-filter-btn').onclick = () => {
             let colIdx = parseInt(document.getElementById('gsb-filter-col').value);
             let type = document.getElementById('gsb-filter-type').value;
             let val1 = document.getElementById('gsb-filter-val1').value.trim();
             let val2 = document.getElementById('gsb-filter-val2').value.trim();
-
-            if (!val1) { showToast("Lütfen bir değer girin.", "warning"); return; }
-            if (type === 'between' && (!val1 || !val2)) {
-                showToast("Aralık filtresi için iki geçerli değer girmelisiniz.", "warning"); return;
-            }
-
+            if (!type) { showToast("Lütfen bir kural tipi seçin.", "warning"); return; }
+            if (!val1) { showToast("Lütfen bir deger girin.", "warning"); return; }
+            if (type === 'between' && (!val1 || !val2)) { showToast("Aralik filtresi için iki deger girmelisiniz.", "warning"); return; }
             globalFilters.push({ colIdx, type, val1, val2 });
             document.getElementById('gsb-filter-val1').value = '';
             document.getElementById('gsb-filter-val2').value = '';
@@ -669,7 +940,7 @@
 
         function updatePresetSelect() {
             const select = document.getElementById('gsb-preset-select');
-            select.innerHTML = '<option value="">-- Kayıtlı Şablon Seç --</option>';
+            select.innerHTML = '<option value="">-- Kayitli Sablon Seç --</option>';
             for (let name in savedPresets) {
                 let opt = document.createElement('option');
                 opt.value = name;
@@ -681,20 +952,18 @@
 
         document.getElementById('gsb-save-preset-btn').onclick = () => {
             const name = document.getElementById('gsb-preset-name').value.trim();
-            if (!name) { showToast("Lütfen şablon için bir isim yazın.", "warning"); return; }
-            if (globalFilters.length === 0) { showToast("Kaydedilecek aktif bir filtre yok. Önce kural ekleyin.", "warning"); return; }
-
+            if (!name) { showToast("Lütfen sablon için bir isim yazin.", "warning"); return; }
+            if (globalFilters.length === 0) { showToast("Kaydedilecek aktif filtre yok. Önce kural ekleyin.", "warning"); return; }
             savedPresets[name] = JSON.parse(JSON.stringify(globalFilters));
-            localStorage.setItem('gsb_filter_presets', JSON.stringify(savedPresets));
+            GM_setValue('gsb_filter_presets', JSON.stringify(savedPresets)); // FIX 5
             document.getElementById('gsb-preset-name').value = '';
             updatePresetSelect();
-            showToast(`✅ "${name}" başarıyla kaydedildi!`, "success");
+            showToast(`✅ "${name}" basariyla kaydedildi!`, "success");
         };
 
         document.getElementById('gsb-load-preset-btn').onclick = () => {
             const name = document.getElementById('gsb-preset-select').value;
-            if (!name || !savedPresets[name]) { showToast("Lütfen yüklenecek bir şablon seçin.", "warning"); return; }
-
+            if (!name || !savedPresets[name]) { showToast("Lütfen yüklenecek bir sablon seçin.", "warning"); return; }
             globalFilters = JSON.parse(JSON.stringify(savedPresets[name]));
             renderFilters();
             showToast(`📂 "${name}" filtreleri yüklendi!`, "info");
@@ -703,41 +972,48 @@
         document.getElementById('gsb-del-preset-btn').onclick = () => {
             const name = document.getElementById('gsb-preset-select').value;
             if (!name || !savedPresets[name]) return;
-
             delete savedPresets[name];
-            localStorage.setItem('gsb_filter_presets', JSON.stringify(savedPresets));
+            GM_setValue('gsb_filter_presets', JSON.stringify(savedPresets)); // FIX 5
             updatePresetSelect();
             showToast(`🗑️ "${name}" silindi.`, "info");
         };
 
-        document.getElementById('gsb-btn-one').onclick = () => startDownload(null, null, downloadFormat === 'xlsx', true);
         document.getElementById('gsb-btn-all').onclick = () => startDownload(1, Infinity, downloadFormat === 'xlsx', false);
         document.getElementById('gsb-btn-custom').onclick = () => {
             const start = parseInt(document.getElementById('gsb-input-start').value);
             const end = parseInt(document.getElementById('gsb-input-end').value);
-
             if (isNaN(start) || isNaN(end) || start > end || start < 1) {
-                showToast("⚠️ Lütfen geçerli bir sayfa aralığı girin (Örn: 3 ve 5).", "warning");
+                showToast("⚠️ Lütfen geçerli bir sayfa araligi girin (Örn: 1 - 3).", "warning");
                 return;
             }
             startDownload(start, end, downloadFormat === 'xlsx', false);
         };
     }
 
-    // --- Sürüklenebilir Başlatma Butonu ---
+    // ============================================================
+    // SÜRÜKLENEBILIR BASLAMA BUTONU
+    // ============================================================
     function injectFloatingButton() {
         if (document.getElementById('gsb-floating-btn')) return;
+
         const btn = document.createElement('div');
         btn.id = 'gsb-floating-btn';
-        btn.innerHTML = '⚙️ Excel Aktarım';
+        // FIX 9: Ayrı text span + progress bar
+        btn.innerHTML = `
+            <span id="gsb-floating-btn-text">⚙️ Excel</span>
+            <div style="position:absolute; bottom:0; left:0; width:100%; height:4px; background:#0a4d28; border-radius:0 0 50px 50px; overflow:hidden;">
+                <div id="gsb-progress-bar-inner" style="height:100%; width:0%; background-color:#2ecc71; border-radius:0 0 50px 50px; transition:width 0.3s ease;"></div>
+            </div>
+        `;
 
         Object.assign(btn.style, {
             position: 'fixed', bottom: '100px', right: '30px', zIndex: '2147483647',
             padding: '12px 20px', backgroundColor: '#1d6f42', color: 'white',
             border: '2px solid #fff', borderRadius: '50px', cursor: 'move',
             fontSize: '14px', fontWeight: 'bold', boxShadow: '0 8px 25px rgba(0,0,0,0.4)',
-            fontFamily: 'Segoe UI, Arial, sans-serif', userSelect: 'none', display: 'flex',
-            alignItems: 'center', justifyContent: 'center'
+            fontFamily: 'Segoe UI, Arial, sans-serif', userSelect: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            overflow: 'hidden'
         });
 
         let isDragging = false, startX, startY, startLeft, startTop;
@@ -747,15 +1023,14 @@
                 isDragging = true;
                 btn.style.left = startLeft + (ev.clientX - startX) + 'px';
                 btn.style.top = startTop + (ev.clientY - startY) + 'px';
-                btn.style.bottom = 'auto'; btn.style.right = 'auto';
+                btn.style.bottom = 'auto';
+                btn.style.right = 'auto';
             }
         };
-
         const onMouseUp = () => {
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
         };
-
         btn.addEventListener('mousedown', (e) => {
             isDragging = false;
             startX = e.clientX; startY = e.clientY;
@@ -764,9 +1039,24 @@
             document.addEventListener('mouseup', onMouseUp);
         });
 
-        btn.addEventListener('click', () => {
-            if (!isDragging) showModal();
+        // FIX 7: async onclick
+        btn.addEventListener('click', async () => {
+            if (!isDragging) {
+                if (isRunning) {
+                    const confirmed = await showConfirmModal(
+                        "Taramayi durdurup su ana kadar alinan veriyi <b>Excel olarak indirmek</b> istiyor musunuz?"
+                    );
+                    if (confirmed) {
+                        stopRequested = true;
+                        updateFloatingBtnText('🛑 İndiriliyor...');
+                        btn.style.backgroundColor = '#e74c3c';
+                    }
+                } else {
+                    showModal();
+                }
+            }
         });
+
         document.body.appendChild(btn);
     }
 
