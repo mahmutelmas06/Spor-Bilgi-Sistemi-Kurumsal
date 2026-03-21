@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         SBS Tablo Excel
+// @name         SBS Excel İndir
 // @namespace    http://tampermonkey.net/
 // @version      1.9
 // @description  Spor Bilgi Sistemi - Verileri excel olarak indirme userscript
@@ -10,8 +10,8 @@
 // @grant        GM_getValue
 // @require      https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js
-// @updateURL    https://raw.githubusercontent.com/mahmutelmas06/Spor-Bilgi-Sistemi-Excel/main/sbs_tablo_excel.user.js
-// @downloadURL  https://raw.githubusercontent.com/mahmutelmas06/Spor-Bilgi-Sistemi-Excel/main/sbs_tablo_excel.user.js
+// @updateURL    https://raw.githubusercontent.com/mahmutelmas06/Spor-Bilgi-Sistemi-Kurumsal/main/sbs_excel_indir.user.js
+// @downloadURL  https://raw.githubusercontent.com/mahmutelmas06/Spor-Bilgi-Sistemi-Kurumsal/main/sbs_excel_indir.user.js
 // @run-at       document-end
 // @exclude      https://spor.gsb.gov.tr/SayfayaYonlendir.aspx
 // @exclude      https://spor.gsb.gov.tr/MainSicilLisans.aspx
