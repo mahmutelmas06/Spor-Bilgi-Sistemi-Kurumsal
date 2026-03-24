@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         SBS Excel İndir
+// @name         SBS Tablo Excel
 // @namespace    http://tampermonkey.net/
-// @version      1.9
+// @version      1.11
 // @description  Spor Bilgi Sistemi - Verileri excel olarak indirme userscript
 // @author       Mahmut Elmas with the help of AI
 // @match        *://spor.gsb.gov.tr/*
@@ -10,8 +10,8 @@
 // @grant        GM_getValue
 // @require      https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js
-// @updateURL    https://raw.githubusercontent.com/mahmutelmas06/Spor-Bilgi-Sistemi-Kurumsal/main/sbs_excel_indir.user.js
-// @downloadURL  https://raw.githubusercontent.com/mahmutelmas06/Spor-Bilgi-Sistemi-Kurumsal/main/sbs_excel_indir.user.js
+// @updateURL    https://raw.githubusercontent.com/mahmutelmas06/Spor-Bilgi-Sistemi-Excel/main/sbs_tablo_excel.user.js
+// @downloadURL  https://raw.githubusercontent.com/mahmutelmas06/Spor-Bilgi-Sistemi-Excel/main/sbs_tablo_excel.user.js
 // @run-at       document-end
 // @exclude      https://spor.gsb.gov.tr/SayfayaYonlendir.aspx
 // @exclude      https://spor.gsb.gov.tr/MainSicilLisans.aspx
@@ -161,94 +161,164 @@
     // ============================================================
     // GÜNCEL YÜZDE TD - PARSE FONKSİYONLARI
     // ============================================================
- /**
- * 1. Başlık Listesi (Sütun sırasına göre)
- */
-function getGuncelYuzdeKeys() {
-    return [
-        'Güncel Yüzde',      // result[0]
-        'Alınabilir',        // result[1]
-        'Alınırsa Yüzde',    // result[2]
-        'Gereken',           // result[3]
-        'Alınan',            // result[4]
-        'Alınmayan',         // result[5]
-        'Eşleştirme Yapılmamış' // result[6]
-    ];
-}
 
-/**
- * 2. TD İçeriğini Ayrıştırma
- */
-function parseGuncelYuzdeTd(td) {
-    // 7 farklı veri alanı için boş dizi (getGuncelYuzdeKeys uzunluğu kadar)
-    const result = ["", "", "", "", "", "", ""];
-
-    // A. Güncel Yüzde (%69 gibi)
-    const valueText = td.querySelector('.value-text');
-    result[0] = valueText ? valueText.innerText.trim() : '';
-
-    // B. Alınabilir ve Alınırsa (Panel dışında, yeşil/kırmızı kutuda)
-    // Regex ile "Alınabilir: 11" ve "Alınırsa: %85" değerlerini çekiyoruz
-    const alinabilirMatch = td.innerText.match(/Alınabilir\s*:\s*(\d+)/i);
-    if (alinabilirMatch) result[1] = alinabilirMatch[1];
-
-    const alinirsaMatch = td.innerText.match(/Alınırsa\s*:\s*(%?\d+)/i);
-    if (alinirsaMatch) result[2] = alinirsaMatch[1];
-
-    // C. Bilgi Paneli İçindeki Detaylar (Gereken, Alınan, Alınmayan)
-    const panel = td.querySelector('.bilgi-paneli');
-    if (panel) {
-        const panelText = panel.innerText;
-
-        // Gereken
-        const gerekenM = panelText.match(/Gereken\s*:\s*(\d+)/i);
-        if (gerekenM) result[3] = gerekenM[1];
-
-        // Alınan
-        const alinanM = panelText.match(/Alınan\s*:\s*(\d+)/i);
-        if (alinanM) result[4] = alinanM[1];
-
-        // Alınmayan
-        const alinmayanM = panelText.match(/Alınmayan\s*:\s*(\d+)/i);
-        if (alinmayanM) result[5] = alinmayanM[1];
-
-        // Eşleştirme Yapılmamış
-        const eslesmeM = panelText.match(/Eşleştirme Yapılmamış\s*:\s*(\d+)/i);
-        if (eslesmeM) result[6] = eslesmeM[1];
+    /**
+     * 1. Bilgi Paneli 1 sütun başlıkları (12 sütun)
+     */
+    function getGuncelYuzdeKeys() {
+        return [
+            'Güncel Yüzde',
+            'Alınabilir',
+            'Alınırsa Yüzde',
+            'Gereken (Net)',
+            'Brüt Gereken',
+            'İzinli',
+            'Alınan (Toplam)',
+            'Öğrenci Katılmadı',
+            'Tesis Uygun Değil',
+            'Alınmayan (Kayıp)',
+            'İşlem Yapılmadı',
+            'Eşleştirme Yapılmamış'
+        ];
     }
 
-    return result;
-}
+    /**
+     * 2. Bilgi Paneli 2 sütun başlıkları (3 sütun)
+     */
+    function getKayitKeys() {
+        return ['Kayıt: Toplam', 'Kayıt: E-Devlet', 'Kayıt: Manuel'];
+    }
 
-/**
- * 3. Tablodaki Sütun İndeksini Bulma
- */
-function findGuncelYuzdeColIndex(tableElement) {
-    if (!tableElement) return -1;
-    const firstRow = tableElement.querySelector('tbody tr');
-    if (!firstRow) return -1;
-    return Array.from(firstRow.querySelectorAll('td'))
-                .findIndex(td => td.classList.contains('guncel-yuzde-td'));
-}
+    /**
+     * 3. Bilgi Paneli 1 TD içeriğini ayrıştırma (12 değer döner)
+     */
+    function parseGuncelYuzdeTd(td) {
+        const result = new Array(12).fill("");
 
-/**
- * 4. Başlıkları Genişletme
- */
-function getExpandedHeaders(tableElement) {
-    const ths = Array.from(tableElement?.querySelectorAll("thead th") || []);
-    const guncelIdx = findGuncelYuzdeColIndex(tableElement);
-    let headers = [];
+        // 0. Ana değer (Güncel Yüzde)
+        const valueText = td.querySelector('.value-text');
+        result[0] = valueText ? valueText.innerText.trim() : td.innerText.split('\n')[0].trim();
 
-    ths.forEach((th, i) => {
-        if (i === guncelIdx) {
-            // "Güncel Yüzde" sütunu yerine parçalanmış alt başlıkları ekle
-            headers.push(...getGuncelYuzdeKeys());
-        } else {
-            headers.push(th.innerText.trim() || ("Sütun " + (i + 1)));
+        // 1-2. Alınabilir & Alınırsa (td'nin genel metninde arar)
+        const tdText = td.innerText.replace(/\s+/g, ' ').trim();
+        const alinabilirM = tdText.match(/Alınabilir\s*:\s*(\d+)/i);
+        if (alinabilirM) result[1] = alinabilirM[1];
+        const alinirsaM = tdText.match(/Alınırsa\s*:\s*(%?\d+)/i);
+        if (alinirsaM) result[2] = alinirsaM[1];
+
+        // 3-11. Bilgi Paneli 1 — DOM sorgusu ile
+        const panel = td.querySelector('.bilgi-paneli');
+        if (panel) {
+
+            // Ana satırlar: <span><b>Gereken:</b></span> <span>9</span>
+            panel.querySelectorAll('div > div').forEach(rowDiv => {
+                const spans = rowDiv.querySelectorAll(':scope > span');
+                if (spans.length < 2) return;
+                const label = spans[0].innerText.replace(':', '').trim();
+                const val   = spans[spans.length - 1].innerText.trim();
+                if (label === 'Gereken')         result[3] = val;
+                else if (label === 'Alınan')     result[6] = val;
+                else if (label === 'Alınmayan')  result[9] = val;
+            });
+
+            // ↳ alt satırlar — b veya span içermeyen yaprak div'ler
+            panel.querySelectorAll('div').forEach(div => {
+                if (div.querySelector('b, span')) return;
+                const txt = div.innerText.trim();
+                if (!txt.includes('↳')) return;
+
+                const brutM   = txt.match(/Brüt\s*:\s*(\d+)/i);
+                const izinliM = txt.match(/İzinli\s*:\s*(\d+)/i);
+                const katilM  = txt.match(/katılmadı\s*:\s*(\d+)/i);
+                const tesisM  = txt.match(/uygun değildi\s*:\s*(\d+)/i);
+                const islemM  = txt.match(/İşlem\s+yapılmadı\s*:\s*(\d+)/i);
+                const eslesM  = txt.match(/Eşleştirme\s+yapılmamış\s*:\s*(\d+)/i);
+
+                if (brutM)   result[4] = brutM[1];
+                if (izinliM) result[5] = izinliM[1];
+                if (katilM)  result[7] = katilM[1];
+                if (tesisM)  result[8] = tesisM[1];
+                if (islemM)  result[10] = islemM[1];
+                if (eslesM)  result[11] = eslesM[1];
+            });
         }
-    });
-    return headers;
-}
+
+        return result;
+    }
+
+    /**
+     * 4. Bilgi Paneli 2 TD içeriğini ayrıştırma (3 değer döner)
+     */
+    function parseKayitTd(td) {
+        const result = new Array(3).fill("");
+
+        // Toplam: data-orijinal="Toplam 3" → 3,  yoksa <strong> içeriği
+        const toplamAttr = td.getAttribute('data-orijinal') || '';
+        const toplamM = toplamAttr.match(/(\d+)/);
+        if (toplamM) {
+            result[0] = toplamM[1];
+        } else {
+            const strong = td.querySelector('strong');
+            if (strong) result[0] = strong.innerText.trim();
+        }
+
+        // E-Devlet ve Manuel: <small> etiketlerinden
+        td.querySelectorAll('small').forEach(small => {
+            const txt = small.innerText.trim();
+            const eM = txt.match(/E-Devlet\s*:\s*(\d+)/i);
+            const mM = txt.match(/Manuel\s*:\s*(\d+)/i);
+            if (eM) result[1] = eM[1];
+            if (mM) result[2] = mM[1];
+        });
+
+        return result;
+    }
+
+    /**
+     * 5. Tablodaki Bilgi Paneli 1 sütun indeksini bulma
+     */
+    function findGuncelYuzdeColIndex(tableElement) {
+        if (!tableElement) return -1;
+        const firstRow = tableElement.querySelector('tbody tr');
+        if (!firstRow) return -1;
+        const tds = Array.from(firstRow.querySelectorAll('td'));
+        // Önce class'a bak, yoksa .bilgi-paneli içeren td'yi bul
+        let idx = tds.findIndex(td => td.classList.contains('guncel-yuzde-td'));
+        if (idx === -1) idx = tds.findIndex(td => td.querySelector('.bilgi-paneli'));
+        return idx;
+    }
+
+    /**
+     * 6. Tablodaki Bilgi Paneli 2 (Kayıt) sütun indeksini bulma
+     */
+    function findKayitColIndex(tableElement) {
+        if (!tableElement) return -1;
+        const firstRow = tableElement.querySelector('tbody tr');
+        if (!firstRow) return -1;
+        return Array.from(firstRow.querySelectorAll('td'))
+            .findIndex(td => td.hasAttribute('data-orijinal') && (td.querySelector('strong') || /Toplam/i.test(td.getAttribute('data-orijinal') || '')));
+    }
+
+    /**
+     * 7. Başlıkları genişletme
+     */
+    function getExpandedHeaders(tableElement) {
+        const ths = Array.from(tableElement?.querySelectorAll("thead th") || []);
+        const guncelIdx = findGuncelYuzdeColIndex(tableElement);
+        const kayitIdx  = findKayitColIndex(tableElement);
+        let headers = [];
+
+        ths.forEach((th, i) => {
+            if (i === guncelIdx) {
+                headers.push(...getGuncelYuzdeKeys());
+            } else if (i === kayitIdx) {
+                headers.push(...getKayitKeys());
+            } else {
+                headers.push(th.innerText.trim() || ("Sütun " + (i + 1)));
+            }
+        });
+        return headers;
+    }
 
     // ============================================================
     // TABLO YARDIMCILARI
@@ -287,6 +357,7 @@ function getExpandedHeaders(tableElement) {
         if (!tableElement) return [];
         let rows = [];
         const guncelColIdx = findGuncelYuzdeColIndex(tableElement);
+        const kayitColIdx  = findKayitColIndex(tableElement);
 
         if (includeHeader) {
             const headRows = Array.from(tableElement.querySelectorAll("thead tr"));
@@ -295,13 +366,14 @@ function getExpandedHeaders(tableElement) {
                 Array.from(row.querySelectorAll("th")).forEach((th, i) => {
                     if (i === guncelColIdx) {
                         allCols.push(...getGuncelYuzdeKeys());
+                    } else if (i === kayitColIdx) {
+                        allCols.push(...getKayitKeys());
                     } else {
                         allCols.push(th.innerText.trim());
                     }
                 });
                 let filteredCols = selectedIndices ? allCols.filter((_, idx) => selectedIndices.includes(idx)) : allCols;
                 if (filteredCols.length > 0) {
-                    // FIX 11: Sadece antrenorAdi varsa baslik ekle
                     if (antrenorAdi) filteredCols.push("Antrenör Ad Soyad");
                     rows.push(filteredCols);
                 }
@@ -316,6 +388,8 @@ function getExpandedHeaders(tableElement) {
             Array.from(row.querySelectorAll("td")).forEach((td, i) => {
                 if (i === guncelColIdx) {
                     allCells.push(...parseGuncelYuzdeTd(td));
+                } else if (i === kayitColIdx) {
+                    allCells.push(...parseKayitTd(td));
                 } else {
                     allCells.push(td.innerText.trim());
                 }
@@ -437,7 +511,7 @@ function getExpandedHeaders(tableElement) {
         } catch (e) {
             console.error("Excel Hatasi:", e);
             showToast("❌ Excel olusturulurken hata olustu. Konsolu kontrol edin.", "error");
-            throw e; // FIX 8: hatayı üst catch'e ilet
+            throw e;
         }
     }
 
@@ -445,10 +519,8 @@ function getExpandedHeaders(tableElement) {
     // FIX 6: GÜVENLİ bootstrapTable ÇAĞIRICI
     // ============================================================
     function callBootstrapTable(tableId, method, arg) {
-        // ID'yi güvenli hale getir (XSS önlemi)
         const safeId = tableId.replace(/['"\\`<>]/g, '');
 
-        // unsafeWindow üzerinden dogrudan çagir (tercih edilen yöntem)
         if (typeof unsafeWindow !== 'undefined' && unsafeWindow.$) {
             try {
                 if (arg !== undefined) {
@@ -460,7 +532,6 @@ function getExpandedHeaders(tableElement) {
             } catch (e) { /* fallback'e geç */ }
         }
 
-        // Fallback: script injection (ID temizlenmis)
         const argStr = arg !== undefined ? `, ${JSON.stringify(arg)}` : '';
         const script = document.createElement('script');
         script.textContent = `try { $('#${safeId}').bootstrapTable('${method}'${argStr}); } catch(e) { console.warn('bootstrapTable:', e); }`;
@@ -513,7 +584,6 @@ function getExpandedHeaders(tableElement) {
         let activeTable = getActiveTable();
         if (!activeTable) { showToast("⚠️ Ekranda indirilecek tablo bulunamadi!", "error"); return; }
 
-        // FIX 3: Genisletilmis başlik indekslerini kullan
         let selectedIndices = null;
         const colCheckboxes = document.querySelectorAll('.gsb-col-checkbox');
         if (document.getElementById('gsb-use-columns')?.checked) {
@@ -544,7 +614,6 @@ function getExpandedHeaders(tableElement) {
             const activeTabPane = document.querySelector('.tab-pane.active.in') || document.querySelector('.tab-pane.active') || document;
             const tableContainer = activeTable.closest('.bootstrap-table') || activeTabPane;
 
-            // FIX 1 + 4 + 7: Düzeltilmis bekleme fonksiyonu
             async function waitForDataChange(oldRawSignature, maxWait = 25) {
                 let i = 0;
                 let absoluteTimeout = 0;
@@ -555,7 +624,6 @@ function getExpandedHeaders(tableElement) {
                     await new Promise(r => setTimeout(r, 400));
                     absoluteTimeout++;
 
-                    // FIX 4: null kontrolü eklendi
                     let tbl = getActiveTable();
                     if (!tbl) { i++; continue; }
 
@@ -576,7 +644,6 @@ function getExpandedHeaders(tableElement) {
                     i++;
 
                     if (i >= maxWait && waitMode === 'manual' && !stopRequested) {
-                        // FIX 7: confirm() yerine async modal
                         const userWantsToFinish = await showConfirmModal(
                             "⏳ <b>ZAMAN ASIMI!</b> Veri degismedi.<br><br>" +
                             "İnternet yavas olabilir veya sayfa hâlâ yükleniyor.<br><br>" +
@@ -584,7 +651,6 @@ function getExpandedHeaders(tableElement) {
                             "<b>Beklemeye Devam:</b> Daha fazla bekle."
                         );
                         if (!userWantsToFinish) {
-                            // FIX 1: Her iki sayaci da sıfırla
                             i = 0;
                             absoluteTimeout = 0;
                         } else {
@@ -595,7 +661,6 @@ function getExpandedHeaders(tableElement) {
                 return null;
             }
 
-            // Tüm sayfalarda 100 kayit/sayfa moduna geç
             if (endPage === Infinity && activeTable && !stopRequested) {
                 updateFloatingBtnText(`⏳ 100 Kayıt...`);
                 const maxLink = Array.from(tableContainer.querySelectorAll('.page-list .dropdown-menu li a')).find(a => a.innerText.trim() === '100');
@@ -607,41 +672,29 @@ function getExpandedHeaders(tableElement) {
                 }
             }
 
-            // ✔ 100 kayıt modundan sonra gerçek sayfa sayısını oku
-let totalPages = null;
+            let totalPages = null;
 
-if (endPage === Infinity) {
-
-    const pagination = tableContainer.querySelector('.pagination') || document.querySelector('.pagination');
-
-    if (pagination) {
-
-        let last = pagination.querySelector('.page-last a');
-
-        if (last) {
-
-            const n = parseInt(last.innerText.trim());
-            if (!isNaN(n)) totalPages = n;
-
-        }
-
-        if (!totalPages) {
-
-            const nums = Array.from(
-                pagination.querySelectorAll('li.page-number a')
-            )
-            .map(a => parseInt(a.innerText.trim()))
-            .filter(n => !isNaN(n));
-
-            if (nums.length) {
-                totalPages = Math.max(...nums);
+            if (endPage === Infinity) {
+                const pagination = tableContainer.querySelector('.pagination') || document.querySelector('.pagination');
+                if (pagination) {
+                    let last = pagination.querySelector('.page-last a');
+                    if (last) {
+                        const n = parseInt(last.innerText.trim());
+                        if (!isNaN(n)) totalPages = n;
+                    }
+                    if (!totalPages) {
+                        const nums = Array.from(
+                            pagination.querySelectorAll('li.page-number a')
+                        )
+                        .map(a => parseInt(a.innerText.trim()))
+                        .filter(n => !isNaN(n));
+                        if (nums.length) {
+                            totalPages = Math.max(...nums);
+                        }
+                    }
+                }
             }
 
-        }
-
-    }
-
-}
             let allData = [];
             let pagesScraped = 0;
 
@@ -663,30 +716,27 @@ if (endPage === Infinity) {
                 updateFloatingBtnText(`⏳ ${startPage}. Sayfaya Atlaniyor...`);
                 let tbl = getActiveTable();
                 if (tbl && tbl.id) {
-                    callBootstrapTable(tbl.id, 'selectPage', startPage); // FIX 6
+                    callBootstrapTable(tbl.id, 'selectPage', startPage);
                 } else {
                     let targetBtn = Array.from(tableContainer.querySelectorAll('.pagination li a')).find(a => parseInt(a.innerText.trim()) === startPage);
                     if (targetBtn) targetBtn.click();
                 }
                 let newSig = await waitForDataChange(currentRawSignature, 25);
-if (newSig) currentRawSignature = newSig;
+                if (newSig) currentRawSignature = newSig;
             }
 
             let currentPageNum = isCurrentOnly ? 1 : startPage;
             let targetEndPage = isCurrentOnly ? 1 : (endPage === Infinity && totalPages ? totalPages : endPage);
 
-
             while (currentPageNum <= targetEndPage) {
                 if (stopRequested) break;
 
-                // FIX 9: İlerleme güncelle
                 if (!isCurrentOnly) updateProgress(currentPageNum, totalPages, allData.length);
 
                 let rowsToSave = getTableRows(pagesScraped === 0, getActiveTable(), selectedIndices, currentActiveFilters, currentAntrenorAdi);
                 allData = allData.concat(rowsToSave);
                 pagesScraped++;
 
-                // FIX 12: Büyük veri uyarisi
                 if (allData.length > 0 && allData.length % 5000 === 0) {
                     showToast(`⚠️ ${allData.length} satir bellekte tutuluyor. Tarayici yavaslyabilir.`, "warning", 5000);
                 }
@@ -699,7 +749,7 @@ if (newSig) currentRawSignature = newSig;
 
                 let tbl = getActiveTable();
                 if (tbl && tbl.id) {
-                    callBootstrapTable(tbl.id, 'nextPage'); // FIX 6
+                    callBootstrapTable(tbl.id, 'nextPage');
                 } else {
                     nextBtn.click();
                 }
@@ -754,7 +804,6 @@ if (newSig) currentRawSignature = newSig;
             }
 
         } catch (e) {
-            // FIX 8: Beklenmeyen hatalar için kullaniciyi bilgilendir
             console.error("SBS Excel - Beklenmeyen Hata:", e);
             showToast("❌ Beklenmeyen bir hata olustu. Konsolu kontrol edin. (F12)", "error", 7000);
         } finally {
@@ -781,14 +830,12 @@ if (newSig) currentRawSignature = newSig;
     function showModal() {
         if (document.getElementById('gsb-modal-overlay')) return;
 
-        // FIX 5: localStorage yerine GM_getValue kullan
         let savedPresets = {};
         try {
             savedPresets = JSON.parse(GM_getValue('gsb_filter_presets', '{}')) || {};
         } catch (e) { console.warn("Filtre sablonlari okunamadi."); }
 
         const table = getActiveTable();
-        // FIX 3 + 10: Genisletilmis baslikları kullan
         const headers = getExpandedHeaders(table);
 
         const overlay = document.createElement('div');
@@ -955,7 +1002,7 @@ if (newSig) currentRawSignature = newSig;
             if (!name) { showToast("Lütfen sablon için bir isim yazin.", "warning"); return; }
             if (globalFilters.length === 0) { showToast("Kaydedilecek aktif filtre yok. Önce kural ekleyin.", "warning"); return; }
             savedPresets[name] = JSON.parse(JSON.stringify(globalFilters));
-            GM_setValue('gsb_filter_presets', JSON.stringify(savedPresets)); // FIX 5
+            GM_setValue('gsb_filter_presets', JSON.stringify(savedPresets));
             document.getElementById('gsb-preset-name').value = '';
             updatePresetSelect();
             showToast(`✅ "${name}" basariyla kaydedildi!`, "success");
@@ -973,7 +1020,7 @@ if (newSig) currentRawSignature = newSig;
             const name = document.getElementById('gsb-preset-select').value;
             if (!name || !savedPresets[name]) return;
             delete savedPresets[name];
-            GM_setValue('gsb_filter_presets', JSON.stringify(savedPresets)); // FIX 5
+            GM_setValue('gsb_filter_presets', JSON.stringify(savedPresets));
             updatePresetSelect();
             showToast(`🗑️ "${name}" silindi.`, "info");
         };
@@ -998,7 +1045,6 @@ if (newSig) currentRawSignature = newSig;
 
         const btn = document.createElement('div');
         btn.id = 'gsb-floating-btn';
-        // FIX 9: Ayrı text span + progress bar
         btn.innerHTML = `
             <span id="gsb-floating-btn-text">⚙️ Excel</span>
             <div style="position:absolute; bottom:0; left:0; width:100%; height:4px; background:#0a4d28; border-radius:0 0 50px 50px; overflow:hidden;">
@@ -1039,7 +1085,6 @@ if (newSig) currentRawSignature = newSig;
             document.addEventListener('mouseup', onMouseUp);
         });
 
-        // FIX 7: async onclick
         btn.addEventListener('click', async () => {
             if (!isDragging) {
                 if (isRunning) {
