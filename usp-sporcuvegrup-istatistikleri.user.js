@@ -625,3 +625,35 @@
     else if (sayfa.includes('KursSporcuAra')) sporcuAraModuBaslat();
 
 })();
+
+(function() {
+    'use strict';
+
+    // ... mevcut kodlarınız ...
+
+    // Tablo ve kapsayıcılarındaki iç scroll'u iptal edip sayfa scroll'unu etkinleştiren CSS
+    const style = document.createElement('style');
+    style.innerHTML = `
+        /* Tabloyu ve muhtemel kapsayıcılarını hedef alıyoruz */
+        table, 
+        .table-responsive, /* Bootstrap veya benzeri temalarda sıkça kullanılan kapsayıcı sınıfı */
+        [style*="overflow: auto"], 
+        [style*="overflow: scroll"] {
+            overflow: visible !important;
+            overflow-x: visible !important;
+            overflow-y: visible !important;
+            max-width: none !important;
+            max-height: none !important;
+            display: table !important; /* Bazı durumlarda kapsayıcının tablo gibi davranmasını sağlar */
+            width: 100% !important;
+        }
+
+        /* HTML ve Body'nin yatayda genişlemesine ve kaydırılmasına izin ver */
+        html, body {
+            overflow-x: auto !important;
+            max-width: none !important;
+        }
+    `;
+    document.head.appendChild(style);
+
+})();
