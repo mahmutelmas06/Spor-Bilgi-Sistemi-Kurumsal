@@ -9,6 +9,8 @@
 // @match        *://spor.gsb.gov.tr/Modules/Antrenman/AntrenorPersonelDetay.aspx?antrenorpersonelid=*
 // @grant        none
 // ==/UserScript==
+
+
 (function() {
     'use strict';
 
