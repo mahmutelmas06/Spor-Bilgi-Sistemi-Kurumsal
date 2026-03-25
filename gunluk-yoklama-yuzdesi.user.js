@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SBS Günlük Yoklama Yüzdesi Gösterici
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      1.3
 // @description  Kurum personelleri için yazılmış iş takip betiğidir. (Akıllı Sütun Tespiti & Saat Duyarlılığı)
 // @author       YZ yardımıyla mahmut.elmas@yaani.com
 // @updateURL    https://raw.githubusercontent.com/mahmutelmas06/sbs-gunluk-yoklama/main/sbs-gunluk-yoklama.user.js
