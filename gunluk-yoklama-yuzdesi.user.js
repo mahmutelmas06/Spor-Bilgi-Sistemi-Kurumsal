@@ -330,24 +330,37 @@
             if (runId !== globalProcessorRunId) { if (iframe) iframe.remove(); return; }
             if (!doc) throw new Error("Boş İçerik");
 
-            const izinRows = doc.querySelectorAll('#gridIzinListesi tbody tr');
+const izinRows = doc.querySelectorAll('#gridIzinListesi tbody tr');
             let allLeaves = [];
-            const extractDates = (t) => {
-                if(!t) return [];
-                const regex = /(\d{1,2})[-./](\d{1,2})[-./](\d{4})(?:\s+(\d{1,2}):(\d{1,2}))?/g;
-                let m, res = [];
-                while ((m = regex.exec(t)) !== null) {
-                    res.push({ ts: new Date(m[3], m[2]-1, m[1], m[4]||0, m[5]||0).getTime(), hasTime: !!m[4] });
+
+            const parseDateFromText = (textValue) => {
+                if (!textValue) return null;
+                const matchResult = /(\d{1,2})[-./](\d{1,2})[-./](\d{4})(?:\s+(\d{1,2}):(\d{1,2}))?/.exec(textValue.trim());
+                if (matchResult) {
+                    return {
+                        ts: new Date(matchResult[3], matchResult[2] - 1, matchResult[1], matchResult[4] || 0, matchResult[5] || 0).getTime(),
+                        hasTime: !!matchResult[4]
+                    };
                 }
-                return res;
+                return null;
             };
 
             izinRows.forEach(tr => {
-                const dts = extractDates(tr.textContent);
-                if (dts.length >= 2) {
-                    let start = Math.min(...dts.map(x=>x.ts)), end = Math.max(...dts.map(x=>x.ts));
-                    if (!dts.find(x=>x.ts===end).hasTime) end += 86399999;
-                    allLeaves.push({ start, end });
+                const tds = tr.querySelectorAll('td');
+                if (tds.length >= 3) {
+                    const baslangicTarihiObjesi = parseDateFromText(tds[1].textContent);
+                    const bitisTarihiObjesi = parseDateFromText(tds[2].textContent);
+
+                    if (baslangicTarihiObjesi && bitisTarihiObjesi) {
+                        let start = baslangicTarihiObjesi.ts;
+                        let end = bitisTarihiObjesi.ts;
+
+                        if (!bitisTarihiObjesi.hasTime) {
+                            end += 86399999;
+                        }
+
+                        allLeaves.push({ start, end });
+                    }
                 }
             });
 
